@@ -1,0 +1,12 @@
+- features:
+  - bdsp_patient_id, site, filename, date <-- **drop these columns**
+    - there is only one row for each visit date
+    - filename is a list of all the notes included in that row for that individual date
+  - days_since_first_visit: total days from t0 (first visit)
+  - num_visits_since_first_visit: number of visits from t0 (first visit)
+  - n+_state: the status of the patient
+    - 0 == prior to / does not have narcolepsy diagnosis
+    - 1 == has narcolepsy diagnosis
+  - features_1: binary features present in current visit
+  - features_2: binary features present in current or previous visits
+  - features_3: # of times feature present in current or previous visits

@@ -228,3 +228,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+longitudinal-time-to-event-model/data_processed_features_3.pickle
+longitudinal-time-to-event-model/features_1.parquet
+longitudinal-time-to-event-model/features_2.parquet
+longitudinal-time-to-event-model/features_3.parquet
+longitudinal-time-to-event-model/results.pickle
+*~
