@@ -1,13 +1,14 @@
-import pickle
+import pickle, sys
 import numpy as np
 import pandas as pd
-import pyarrow.parquet as pq
 
 
-metadata = pq.read_metadata('features_3.parquet')
-names_feat = metadata.schema.names[6:]
+outcome_of_interest = sys.argv[1].strip().lower()
 
-with open('models_C_Y_pca.pickle', 'rb') as f:
+with open(f'data_processed_features_3_{outcome_of_interest}.pickle', 'rb') as f:
+    res = pickle.load(f)
+names_feat = res['names_feat']
+with open(f'results_{outcome_of_interest}.pickle', 'rb') as f:
     res = pickle.load(f)
 model_PCAs = res['model_PCAs']
 model_Ys = res['model_Ys']
@@ -53,4 +54,4 @@ df_coef['CoefVar(STD-Mean Ratio)'] = df_coef.STD/df_coef.Mean
 df_coef['SameSign'] = (df_coef.iloc[:,:5]>0).all(axis=1)|(df_coef.iloc[:,:5]<0).all(axis=1)
 df_coef = df_coef.sort_values('Mean', key=abs, ascending=False)
 print(df_coef)
-df_coef.to_excel('coefs.xlsx')
+df_coef.to_excel(f'coefs_{outcome_of_interest}.xlsx')

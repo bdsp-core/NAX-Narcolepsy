@@ -236,3 +236,6 @@ longitudinal-time-to-event-model/features_2.parquet
 longitudinal-time-to-event-model/features_3.parquet
 longitudinal-time-to-event-model/results.pickle
 *~
+
+*pickle
+*parquet

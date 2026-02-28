@@ -1,4 +1,4 @@
-import pickle
+import pickle, sys
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -130,7 +130,10 @@ def get_pointestimate_ci(X, nbt=1000, random_state=2026, verbose=False):
 
 
 def main():
-    with open('data_processed_features_3.pickle', 'rb') as f:
+    outcome_of_interest = sys.argv[1].strip().lower()
+    cv_method = sys.argv[2].strip().lower()
+
+    with open(f'data_processed_features_3_{outcome_of_interest}.pickle', 'rb') as f:
         res = pickle.load(f)
     sites = res['sites']
     sids = res['sids']
@@ -139,10 +142,10 @@ def main():
     Y = res['Y']
     C = res['C']
     dT = res['dT']
-    with open('survival_functions_features_3.pickle', 'rb') as f:
+    with open(f'results_{outcome_of_interest}_CV{cv_method}.pickle', 'rb') as f:
         res = pickle.load(f)
     Sp = res['S_pred_cv']
-    risk = res['risk_cv']
+    risk = res['riskX_cv']
 
     unique_sids=np.array(sorted(set(sids)))
     cif_t = np.arange(0,15.1,0.1)
@@ -189,15 +192,15 @@ def main():
     plt.plot(cif_t, cif0*100,c='b',lw=1.5, ls='--', label='Low risk group - estimated (PLR)')
     plt.fill_between(cif0_km_t, cif0_km_lb*100, cif0_km_ub*100,color='b',alpha=0.3)
     plt.plot(cif0_km_t, cif0_km*100,c='b',label='Low risk group - ground truth (KM)')
-    plt.xlim(0,5)
-    plt.ylim(0,35)
+    plt.xlim(0,2)
+    plt.ylim(0,5)
     plt.legend()
     plt.xlabel('Year since visit')
     plt.ylabel('Cumulative incidence (%)')
     plt.grid(True)
     sns.despine()
     plt.tight_layout()
-    plt.savefig('CIF_by_risk.png', bbox_inches='tight')
+    plt.savefig(f'CIF_by_risk_{outcome_of_interest}_CV{cv_method}.png', bbox_inches='tight')
 
     plt.close()
     plt.plot(cif_t, cifs.T*100, c='k', alpha=0.1)
@@ -207,22 +210,22 @@ def main():
     plt.ylabel('Cumulative incidence (%)')
     sns.despine()
     plt.tight_layout()
-    plt.savefig('CIF_individual.png', bbox_inches='tight')
+    plt.savefig(f'CIF_individual_{outcome_of_interest}_CV{cv_method}.png', bbox_inches='tight')
 
     plt.close()
     plt.fill_between(cif_t, cifa_lb*100, cifa_ub*100,color='k',alpha=0.3)
     plt.plot(cif_t, cifa*100,c='k',lw=1.5,ls='--',label='Estimated (PLR)')
     plt.fill_between(cifa_km_t, cifa_km_lb*100, cifa_km_ub*100,color='k',alpha=0.3)
     plt.plot(cifa_km_t, cifa_km*100,c='k',label='Ground truth (KM)')
-    plt.xlim(0,5)
-    plt.ylim(0,35)
+    plt.xlim(0,2)
+    plt.ylim(0,5)
     plt.legend()
     plt.xlabel('Year since visit')
     plt.ylabel('Cumulative incidence (%)')
     plt.grid(True)
     sns.despine()
     plt.tight_layout()
-    plt.savefig('CIF_all_average.png', bbox_inches='tight')
+    plt.savefig(f'CIF_all_average_{outcome_of_interest}_CV{cv_method}.png', bbox_inches='tight')
     breakpoint()
 
 

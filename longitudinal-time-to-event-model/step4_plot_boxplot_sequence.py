@@ -1,4 +1,4 @@
-import pickle
+import pickle, sys
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -27,7 +27,10 @@ def get_pointestimate_ci(X, nbt=1000, random_state=2026, verbose=False):
 
 
 def main():
-    with open('data_processed_features_3.pickle', 'rb') as f:
+    outcome_of_interest = sys.argv[1].lower().strip()
+    cv_method = sys.argv[2].strip().lower()
+
+    with open(f'data_processed_features_3_{outcome_of_interest}.pickle', 'rb') as f:
         res = pickle.load(f)
     sites = res['sites']
     sids = res['sids']
@@ -36,7 +39,7 @@ def main():
     Y = res['Y']
     C = res['C']
     dT = res['dT']
-    with open('results.pickle', 'rb') as f:
+    with open(f'results_{outcome_of_interest}_CV{cv_method}.pickle', 'rb') as f:
         res = pickle.load(f)
     riskX = res['riskX_cv']
     riskT = res['riskT_cv']
@@ -47,7 +50,7 @@ def main():
     sid2ids = pd.DataFrame(data={'sid':sids}).groupby('sid').indices
     unique_sids = sorted(sid2ids.keys())
 
-    Tstart = -5
+    Tstart = -4
     Tend = 0
     Tstep = 0.1
     ts = np.arange(Tstart, Tend+Tstep, Tstep)
@@ -122,7 +125,7 @@ def main():
     risk1, risk1_lb25, risk1_ub75, risk1_lb2_5, risk1_ub97_5 = np.nanpercentile(risks[mask_high], (50,25,75,2.5,97.5), axis=0)
     risk0, risk0_lb25, risk0_ub75, risk0_lb2_5, risk0_ub97_5 = np.nanpercentile(risks[mask_low], (50,25,75,2.5,97.5), axis=0)
     Nbt = 1000
-    """
+    #"""
     auroc = []; auroc_lb = []; auroc_ub = []
     auprc = []; auprc_lb = []; auprc_ub = []; auprc_bl = []
     for ii in tqdm(range(risks.shape[1])):
@@ -151,14 +154,14 @@ def main():
         a, b = np.percentile(auprcs[1:], (2.5, 97.5))
         auprc_lb.append(a)
         auprc_ub.append(b)
-    with open(f'auroc_auprc_Nbt{Nbt}.pickle', 'wb') as f:
+    with open(f'auroc_auprc_Nbt{Nbt}_{outcome_of_interest}_{cv_method}.pickle', 'wb') as f:
         pickle.dump({'auroc':auroc, 'auroc_lb':auroc_lb, 'auroc_ub':auroc_ub,
             'auprc':auprc, 'auprc_lb':auprc_lb, 'auprc_ub':auprc_ub,'auprc_bl':auprc_bl}, f)
-    """
-    with open(f'auroc_auprc_Nbt{Nbt}.pickle', 'rb') as f:
-        res = pickle.load(f)
-    auroc = res['auroc']; auroc_lb = res['auroc_lb']; auroc_ub = res['auroc_ub']
-    auprc = res['auprc']; auprc_lb = res['auprc_lb']; auprc_ub = res['auprc_ub']; auprc_bl = res['auprc_bl']
+    #"""
+    #with open(f'auroc_auprc_Nbt{Nbt}_{outcome_of_interest}.pickle', 'rb') as f:
+    #    res = pickle.load(f)
+    #auroc = res['auroc']; auroc_lb = res['auroc_lb']; auroc_ub = res['auroc_ub']
+    #auprc = res['auprc']; auprc_lb = res['auprc_lb']; auprc_ub = res['auprc_ub']; auprc_bl = res['auprc_bl']
     
     plt.close()
     fig = plt.figure(figsize=(8,7.5))
@@ -183,7 +186,7 @@ def main():
     ax.plot(ts, auroc, c='k')
     ax.axhline(0.5, c='k', ls='--')
     ax.set_ylabel('AUROC')
-    ax.set_ylim(0.6,0.83)
+    #ax.set_ylim(0.6,0.83)
     ax.set_yticks([0.6,0.7,0.8])
     plt.setp(ax.get_xticklabels(), visible=False)
     ax.grid(True)
@@ -194,7 +197,7 @@ def main():
     ax.plot(ts, auprc, c='k')
     ax.plot(ts, auprc_bl, c='k', ls='--')
     ax.set_ylabel('AUPRC')
-    ax.set_ylim(0,0.31)
+    #ax.set_ylim(0,0.31)
     ax.set_yticks([0,0.1,0.2,0.3])
     plt.setp(ax.get_xticklabels(), visible=False)
     ax.grid(True)
@@ -203,14 +206,14 @@ def main():
     ax = fig.add_subplot(gs[3], sharex=ax0)
     ax.plot(ts, np.isnan(risks).mean(axis=0)*100, c='k')
     ax.set_ylabel('Not available %')
-    ax.set_ylim(0,50.1)
+    #ax.set_ylim(0,50.1)
     ax.set_yticks([0,10,20,30,40,50])
     ax.set_xlabel('Years before diagnosis/censoring')
     ax.grid(True)
     sns.despine()
 
     plt.tight_layout()
-    plt.savefig('risk_sequence.png', bbox_inches='tight', dpi=300)
+    plt.savefig(f'risk_sequence_{outcome_of_interest}_{cv_method}.png', bbox_inches='tight', dpi=300)
 
 
 if __name__=='__main__':
