@@ -144,11 +144,20 @@ def main():
     dT = res['dT']
     with open(f'results_{outcome_of_interest}_CV{cv_method}.pickle', 'rb') as f:
         res = pickle.load(f)
-    Sp = res['S_pred_cv']
-    risk = res['riskX_cv']
+    Sp = res['S_pred_cv'][0]
+    risk = res['riskX_cv'][0]
+    if cv_method=='mixed':
+        ids_te = res['ids_te']
+        sites = sites[ids_te]
+        sids  = sids[ids_te]
+        X = X[ids_te]
+        T = T[ids_te]
+        Y = Y[ids_te]
+        C = C[ids_te]
+        dT = dT[ids_te]
 
     unique_sids=np.array(sorted(set(sids)))
-    cif_t = np.arange(0,15.1,0.1)
+    cif_t = np.arange(0,5.1,0.1)
     cifs = []
     risk_subject = []
     L = []
@@ -182,6 +191,18 @@ def main():
     cif1_km_t, cif1_km, cif1_km_lb, cif1_km_ub = observed_cif_from_long(sids[ids], Y[ids], T[ids])
     ids = np.in1d(sids, sids_low)
     cif0_km_t, cif0_km, cif0_km_lb, cif0_km_ub = observed_cif_from_long(sids[ids], Y[ids], T[ids])
+
+    # get NNT
+    tt=np.sort(np.r_[cif0_km_t,cif1_km_t])
+    foo0=interp1d(cif0_km_t,cif0_km,bounds_error=False)
+    foo1=interp1d(cif1_km_t,cif1_km,bounds_error=False)
+    y0=foo0(tt)
+    y1=foo1(tt)
+    df_nnt=pd.DataFrame(data={'Time(Year)':tt,'AbsRisk_T1':y0, 'AbsRisk_T3':y1, 'RiskDiff':y1-y0,'NNT':1/(y1-y0)}).dropna(ignore_index=True)
+    df_nnt['NNT']=np.ceil(df_nnt.NNT).astype(int)
+    df_nnt=df_nnt[df_nnt['Time(Year)']<=2].reset_index(drop=True)
+    print(df_nnt)
+    df_nnt.to_csv(f'NNT_{outcome_of_interest}_CV{cv_method}.csv', index=False)
 
     plt.close()
     plt.fill_between(cif_t, cif1_lb*100, cif1_ub*100,color='r',alpha=0.3)
@@ -226,7 +247,6 @@ def main():
     sns.despine()
     plt.tight_layout()
     plt.savefig(f'CIF_all_average_{outcome_of_interest}_CV{cv_method}.png', bbox_inches='tight')
-    breakpoint()
 
 
 if __name__=='__main__':

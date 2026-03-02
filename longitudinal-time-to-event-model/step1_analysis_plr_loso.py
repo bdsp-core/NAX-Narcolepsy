@@ -175,6 +175,7 @@ def main():
     riskTs_cv = np.zeros(len(T))
     feature_masks_cv = []
     perf_per_feats = []
+    perf_nfs = []
     for cvi, cvf in enumerate(unique_cv_folds):
         print(f'\n========\nCV fold {cvi+1}/{len(unique_cv_folds)} {cvf}\n========\n')
         ids_tr = cv_folds_var!=cvf
@@ -189,7 +190,7 @@ def main():
         #pca = PCA(n_components=60, random_state=2026+cvi).fit(Xtr) # 60 is roughly 95%
         #print(f'{pca.explained_variance_ratio_.sum() = }')
         #Xtr2 = pca.transform(Xtr)
-        model_Y, model_C, X_mean, X_sd, T_mean, T_sd, selected_feature_mask, perf_per_feat = train(sitestr, sidstr, Xtr, Ttr, Ytr, Ctr, dTtr, n_jobs=n_jobs, random_state=2026+cvi)
+        model_Y, model_C, X_mean, X_sd, T_mean, T_sd, selected_feature_mask, perf_per_feat, perf_nf = train(sitestr, sidstr, Xtr, Ttr, Ytr, Ctr, dTtr, n_jobs=n_jobs, random_state=2026+cvi)
         #X_mean2 = X_mean[selected_feature_mask]
         #X_sd2 = X_sd[selected_feature_mask]
 
@@ -221,10 +222,11 @@ def main():
         T_sds.append(T_sd)
         feature_masks_cv.append(selected_feature_mask)
         perf_per_feats.append(perf_per_feat)
+        perf_nfs.append(perf_nf)
     
     with open(f'results_{outcome_of_interest}_CV{cv_method}.pickle', 'wb') as f:
         pickle.dump({#'model_PCAs':pcas, 
-            'feature_masks_cv':feature_masks_cv, 'perf_per_feats':perf_per_feats,
+            'feature_masks_cv':feature_masks_cv, 'perf_per_feats':perf_per_feats, 'perf_nfs':perf_nfs,
             'model_Cs':model_Cs, 'model_Ys':model_Ys,
             'X_names':names_feat, 'X_means':X_means, 'X_sds':X_sds, 'T_means':T_means, 'T_sds':T_sds,
             'CV_names':unique_cv_folds, 'perf_te_folds':perf_te_folds,

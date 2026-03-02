@@ -5,7 +5,7 @@ from tqdm import tqdm
 from scipy.interpolate import interp1d
 from sklearn.metrics import roc_auc_score, average_precision_score
 import matplotlib.pyplot as plt
-plt.rcParams.update({'font.size': 14})
+plt.rcParams.update({'font.size': 13})
 import seaborn as sns
 sns.set_style('ticks')
 
@@ -41,16 +41,31 @@ def main():
     dT = res['dT']
     with open(f'results_{outcome_of_interest}_CV{cv_method}.pickle', 'rb') as f:
         res = pickle.load(f)
-    riskX = res['riskX_cv']
-    riskT = res['riskT_cv']
     model_Ys = res['model_Ys']
     T_means = res['T_means']
     T_sds = res['T_sds']
 
+    if cv_method=='mixed':
+        ids_te = res['ids_te']
+        sites = sites[ids_te]
+        sids  = sids[ids_te]
+        X = X[ids_te]
+        T = T[ids_te]
+        Y = Y[ids_te]
+        C = C[ids_te]
+        dT = dT[ids_te]
+        riskX = res['riskX_cv'][0]/1e13#TODO
+        print(riskX)
+        riskT = res['riskT_cv'][0]/1e13
+        print(riskT)
+    else:
+        riskX = res['riskX_cv']
+        riskT = res['riskT_cv']
+
     sid2ids = pd.DataFrame(data={'sid':sids}).groupby('sid').indices
     unique_sids = sorted(sid2ids.keys())
 
-    Tstart = -4
+    Tstart = -2
     Tend = 0
     Tstep = 0.1
     ts = np.arange(Tstart, Tend+Tstep, Tstep)
@@ -60,15 +75,20 @@ def main():
     base_riskXs = []
     last_Ys = []
     #np.random.seed(2026)
-    for sid in unique_sids:
+    for sii, sid in enumerate(tqdm(unique_sids)):
         site = sorted(set(sites[sids==sid]))
         assert len(site)==1
         site = site[0]
-        siteid = res['CV_names'].index(site)
+        if cv_method=='loso':
+            siteid = res['CV_names'].index(site)
+        else:
+            siteid = 0
         ids = sid2ids[sid]
         T_ = T[ids]
         #if Y[ids[-1]]==1:
         tt = T_[-1] + ts
+        T_ = np.array(T_)
+        T_[-1] += 0.0001
         #else:
         #    tt = T_[-1] + np.random.rand(N_ts)*(Tend - Tstart) + Tstart
 
@@ -79,7 +99,7 @@ def main():
         #riskT_ = riskT[ids]
         #fooT = interp1d(T_, riskT_, kind='cubic', bounds_error=False)
         #riskTs.append(fooT(tt))
-        riskTs.append((model_Ys[siteid].params[1:4]*(np.c_[tt,tt**2,tt**3]-T_means[siteid])/T_sds[siteid]).sum(axis=1))
+        riskTs.append((model_Ys[siteid].params[1:4]/1e13*(np.c_[tt,tt**2,tt**3]-T_means[siteid])/T_sds[siteid]).sum(axis=1))
 
         base_riskXs.append(riskX_[0])
         last_Ys.append(Y[ids[-1]])
@@ -124,7 +144,7 @@ def main():
     """
     risk1, risk1_lb25, risk1_ub75, risk1_lb2_5, risk1_ub97_5 = np.nanpercentile(risks[mask_high], (50,25,75,2.5,97.5), axis=0)
     risk0, risk0_lb25, risk0_ub75, risk0_lb2_5, risk0_ub97_5 = np.nanpercentile(risks[mask_low], (50,25,75,2.5,97.5), axis=0)
-    Nbt = 1000
+    Nbt = 1000##TODO
     #"""
     auroc = []; auroc_lb = []; auroc_ub = []
     auprc = []; auprc_lb = []; auprc_ub = []; auprc_bl = []
@@ -170,11 +190,11 @@ def main():
     ax = fig.add_subplot(gs[0]); ax0 = ax
     #ax.fill_between(ts, risk1_lb2_5, risk1_ub97_5, color='r', alpha=0.3)
     ax.fill_between(ts, risk1_lb25, risk1_ub75, color='r', alpha=0.3)
-    ax.plot(ts, risk1, c='r', label='Eventually NT1/2')
+    ax.plot(ts, risk1, c='r', label=f'Eventually {outcome_of_interest.upper()}')
     #ax.fill_between(ts, risk0_lb2_5, risk0_ub97_5, color='b', alpha=0.3)
     ax.fill_between(ts, risk0_lb25, risk0_ub75, color='b', alpha=0.3)
-    ax.plot(ts, risk0, c='b', label='Never NT1/2')
-    ax.legend(loc='lower left', ncols=2)
+    ax.plot(ts, risk0, c='b', label=f'Never {outcome_of_interest.upper()}')
+    ax.legend(loc='upper left', ncols=2)
     ax.set_xlim(Tstart, Tend)
     plt.setp(ax.get_xticklabels(), visible=False)
     ax.set_ylabel('Predicted\nrisk (a.u.)')
@@ -187,7 +207,7 @@ def main():
     ax.axhline(0.5, c='k', ls='--')
     ax.set_ylabel('AUROC')
     #ax.set_ylim(0.6,0.83)
-    ax.set_yticks([0.6,0.7,0.8])
+    ax.set_yticks([0.6,0.7,0.8,0.9])
     plt.setp(ax.get_xticklabels(), visible=False)
     ax.grid(True)
     sns.despine()
@@ -198,7 +218,7 @@ def main():
     ax.plot(ts, auprc_bl, c='k', ls='--')
     ax.set_ylabel('AUPRC')
     #ax.set_ylim(0,0.31)
-    ax.set_yticks([0,0.1,0.2,0.3])
+    #ax.set_yticks([0,0.1,0.2,0.3])
     plt.setp(ax.get_xticklabels(), visible=False)
     ax.grid(True)
     sns.despine()

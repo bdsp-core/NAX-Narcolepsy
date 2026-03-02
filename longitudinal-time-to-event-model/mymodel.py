@@ -12,7 +12,7 @@ def transform_T(T):
     return np.c_[T, T**2, T**3]
 
 
-def train_(sites, sids, X, T, Y, C, dT, sid2ids=None, start_params=None, maxiter=100, alpha=None):
+def train_(sids, X, T, Y, C, dT, start_params=None, maxiter=100, alpha=None):
     # inner logic
     T2 = transform_T(T)
     XT = np.c_[T2, X]
@@ -35,8 +35,7 @@ def train_(sites, sids, X, T, Y, C, dT, sid2ids=None, start_params=None, maxiter
     g = model_C2.predict(T_, offset=np.log(dT))
     log1mg_nom = np.log1p(-np.clip(g, 1e-10, 1-1e-10))
 
-    if sid2ids is None:
-        sid2ids = pd.DataFrame(data={'sid':sids}).groupby('sid').indices
+    sid2ids = pd.DataFrame(data={'sid':sids}).groupby('sid').indices
     unique_sids = sorted(sid2ids.keys())
     sIPCW = np.zeros(len(X))
     for sid in unique_sids:
@@ -73,20 +72,27 @@ def train_(sites, sids, X, T, Y, C, dT, sid2ids=None, start_params=None, maxiter
 
 
 def train(sites, sids, X, T, Y, C, dT, n_jobs=1, random_state=2026):
+    """
+    CV + feature selection
+    """
     sid2ids = pd.DataFrame(data={'sid':sids}).groupby('sid').indices
+    unique_sites = np.unique(sites)
 
     def foo(j):
-        model_Y, model_C1, X_mean, X_sd, T_mean, T_sd = train_(sites, sids, X[:,[j]], T, Y, C, dT, sid2ids=sid2ids)
-        IPCW = get_IPCW(model_C1, sids, X[:,[j]], T, dT, X_mean, X_sd, T_mean, T_sd, sid2ids=sid2ids)
-        riskX, riskT = get_risk(model_Y, X[:,[j]], X_mean, X_sd, T, T_mean, T_sd)
-        cindex = uno_c_index(sid2ids, Y, T, riskX, IPCW)
-        #print(j, cindex)
-        return cindex
+        cindexs = []
+        for site in unique_sites:
+            trids = sites!=site
+            teids = sites==site
+            model_Y, model_C1, X_mean, X_sd, T_mean, T_sd = train_(sids[trids], X[trids][:,[j]], T[trids], Y[trids], C[trids], dT[trids])
+            IPCW = get_IPCW(model_C1, sids[teids], X[teids][:,[j]], T[teids], dT[teids], X_mean, X_sd, T_mean, T_sd)
+            riskX, riskT = get_risk(model_Y, X[teids][:,[j]], X_mean, X_sd, T[teids], T_mean, T_sd)
+            cindexs.append(uno_c_index(sids[teids], Y[teids], T[teids], riskX, IPCW))
+        return np.mean(cindexs)
 
     with Parallel(n_jobs=n_jobs, verbose=10) as par:
         perfs_per_feature = par(delayed(foo)(j) for j in range(X.shape[1]))
-    #with open('tmp_perfs_per_feature.pickle','wb') as ff:
-    #    pickle.dump(perfs_per_feature, ff)
+    with open('tmp_perfs_per_feature.pickle','wb') as ff:
+        pickle.dump(perfs_per_feature, ff)
     #with open('tmp_perfs_per_feature.pickle','rb') as ff:
     #    perfs_per_feature = pickle.load(ff)
     #print('!!Reading from tmp_perfs_per_feature.pickle')
@@ -95,12 +101,9 @@ def train(sites, sids, X, T, Y, C, dT, n_jobs=1, random_state=2026):
     feature_order = feature_order[perfs_per_feature[feature_order]>0.6]
     print(f'{X.shape[1]} features reduced to {len(feature_order)} with univariate C-index>0.6')
 
-    nfs = range(1, min(len(feature_order), 20)+1)[::-1]
-    """
-    #skf = GroupKFold(n_splits=10, shuffle=True, random_state=random_state)
+    nfs = range(1, min(len(feature_order), 20)+1)
     tridss = []
     teidss = []
-    #for cvi, (trids, teids) in enumerate(skf.split(X, Y, sids)):
     unique_sites = sorted(set(sites))
     for site in unique_sites:
         trids = np.where(sites!=site)[0]
@@ -109,67 +112,30 @@ def train(sites, sids, X, T, Y, C, dT, n_jobs=1, random_state=2026):
         teidss.append(teids)
 
     def foo2(trids, teids, feature_mask):
-        model_Y, model_C1, X_mean, X_sd, T_mean, T_sd = train_(sites[trids], sids[trids], X[trids][:,feature_mask], T[trids], Y[trids], C[trids], dT[trids])
+        model_Y, model_C1, X_mean, X_sd, T_mean, T_sd = train_(sids[trids], X[trids][:,feature_mask], T[trids], Y[trids], C[trids], dT[trids])
         IPCW = get_IPCW(model_C1, sids[teids], X[teids][:,feature_mask], T[teids], dT[teids], X_mean, X_sd, T_mean, T_sd)
         riskX, riskT = get_risk(model_Y, X[teids][:,feature_mask], X_mean, X_sd, T[teids], T_mean, T_sd)
-        return IPCW, riskX, riskT
+        cindex = uno_c_index(sids[teids], Y[teids], T[teids], riskX, IPCW)
+        return cindex
 
     perfs_nf = []
     for nf in nfs:
-        feature_mask = np.in1d(np.arange(X.shape[1]), feature_order[:nf])
+        feature_mask = feature_order[:nf]
 
         with Parallel(n_jobs=n_jobs, verbose=10) as par:
             res = par(delayed(foo2)(trids, teids, feature_mask) for trids, teids in zip(tridss, teidss))
-        IPCW = np.zeros(len(X))
-        riskX = np.zeros(len(X))
-        for j in range(len(res)):
-            IPCW[teidss[j]] = res[j][0]
-            riskX[teidss[j]] = res[j][1]
-        cindex = uno_c_index(sid2ids, Y, T, riskX, IPCW)
         #if len(perfs_nf)==0 or cindex>perfs_nf[-1]:
-        perfs_nf.append(cindex)
+        perfs_nf.append(np.mean(res))
         #else:
         #    break
-        print(perfs_nf)
+        print(nf, perfs_nf)
 
-    def foo2(feature_mask):
-        res = train_(sites, sids, X[:,feature_mask], T, Y, C, dT)
-        return -res[0].bic, res
-    with Parallel(n_jobs=n_jobs, verbose=10) as par:
-        perfs_nf = par(delayed(foo2)( np.in1d(np.arange(X.shape[1]), feature_order[:nf])) for nf in nfs)
-
-    perfs_nf = []
-    ress = []
-    masks = []
-    for ni, nf in enumerate(nfs):
-        #mask = np.in1d(np.arange(X.shape[1]), feature_order[:nf])
-        mask = feature_order[:nf] # actually, ids
-        if ni==0:
-            res = train_(sites, sids, X[:,mask], T, Y, C, dT)
-        else:
-            res = train_(sites, sids, X[:,mask], T, Y, C, dT, start_params=ress[0][0].params[:nf+4], maxiter=10
-        perfs_nf.append( -res[0].bic )
-        ress.append(res)
-        masks.append(mask)
-        print(nf, perfs_nf[-1])
-    """
-
-    mask = feature_order[:nfs[0]] # actually, ids
-    res0 = train_(sites, sids, X[:,mask], T, Y, C, dT)
-    params0 = res0[0].params
-    params0 = (params0-params0.mean())/params0.std()
-    with Parallel(n_jobs=n_jobs, verbose=10) as par:
-        ress = par(delayed(train_)( sites, sids, X[:,feature_order[:nf]], T, Y, C, dT, start_params=params0[:nf+4], maxiter=20) for nf in nfs[1:])
-    perfs_nf = [-x[0].bic for x in ress]
-    ress = [res0]+ress
-    perfs_nf = [-res0[0].bic]+perfs_nf
-
+    breakpoint()
     best_id = np.argmax(perfs_nf)
     best_nf = nfs[best_id]
     feature_mask = feature_order[:best_nf]
-    #model_Y, model_C1, X_mean, X_sd, T_mean, T_sd = train_(sites, sids, X[:,feature_mask], T, Y, C, dT)
-    model_Y, model_C1, X_mean, X_sd, T_mean, T_sd = ress[best_id]
-    return model_Y, model_C1, X_mean, X_sd, T_mean, T_sd, feature_mask, perfs_per_feature
+    model_Y, model_C1, X_mean, X_sd, T_mean, T_sd = train_(sids, X[:,feature_mask], T, Y, C, dT)
+    return model_Y, model_C1, X_mean, X_sd, T_mean, T_sd, feature_mask, perfs_per_feature, perfs_nf
 
 
 def predict_survival_curve(model_Y, sids, X, T, dT, X_mean, X_sd, T_mean, T_sd):
@@ -189,7 +155,7 @@ def predict_survival_curve(model_Y, sids, X, T, dT, X_mean, X_sd, T_mean, T_sd):
     return S
 
 
-def get_IPCW(model_C, sids, X, T, dT, X_mean, X_sd, T_mean, T_sd, clip=10, sid2ids=None):
+def get_IPCW(model_C, sids, X, T, dT, X_mean, X_sd, T_mean, T_sd, clip=10):
     unique_sids = sorted(set(sids))
     T2 = transform_T(T)
     XT = np.c_[T2, X]
@@ -200,8 +166,7 @@ def get_IPCW(model_C, sids, X, T, dT, X_mean, X_sd, T_mean, T_sd, clip=10, sid2i
     g = model_C.predict(XT_, offset=np.log(dT))
     log1mg = np.log1p(-np.clip(g, 1e-10, 1-1e-10))
     IPCW = np.zeros(len(X))
-    if sid2ids is None:
-        sid2ids = pd.DataFrame(data={'sid':sids}).groupby('sid').indices
+    sid2ids = pd.DataFrame(data={'sid':sids}).groupby('sid').indices
     for sid in unique_sids:
         mask = sid2ids[sid]
         IPCW[mask] = np.exp(-np.r_[0,np.cumsum(log1mg[mask][:-1])])
@@ -216,7 +181,8 @@ def get_risk(model_Y, X, X_mean, X_sd, T, T_mean, T_sd):
     return riskX, riskT
 
 
-def uno_c_index(sid2ids, Y, T, risk, IPCW):
+def uno_c_index(sids, Y, T, risk, IPCW):
+    sid2ids = pd.DataFrame(data={'sid':sids}).groupby('sid').indices
     unique_sids = sorted(sid2ids.keys())
     cindex_den = []
     cindex_nom = []
@@ -260,11 +226,10 @@ def evaluate(model_Y, model_C, sids_, Y_, X_, T_, X_mean, X_sd, T_mean, T_sd, dT
         X = X_[btids]
         T = T_[btids]
         IPCW = IPCW_[btids]
-        sid2ids = pd.DataFrame(data={'sid':sids}).groupby('sid').indices
 
         # Uno's C-index
         riskX, riskT = get_risk(model_Y, X, X_mean, X_sd, T, T_mean, T_sd)
-        cindex = uno_c_index(sid2ids, Y, T, riskX, IPCW)
+        cindex = uno_c_index(sids, Y, T, riskX, IPCW)
         return cindex, riskX, riskT
 
     with Parallel(n_jobs=n_jobs, verbose=False) as par:
