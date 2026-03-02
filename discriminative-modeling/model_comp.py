@@ -644,7 +644,7 @@ def define_models_config():
             LogisticRegression,
             {
                 'C': [0.01, 0.1, 1.0, 10.0],
-                'l1_ratio': [0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0],
+                'l1_ratio': [0.0, 0.25, 0.5, 0.75, 1.0],
                 'solver': ['saga'],
                 'class_weight': [None, 'balanced'],
                 'random_state': [42],
