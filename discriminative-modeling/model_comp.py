@@ -301,20 +301,6 @@ def prepare_data(source_df, target_col, source_col):
     # Detect problem type for quality checks
     problem_type, n_classes, unique_classes = detect_problem_type(y)
     
-    # Check for class imbalance and warn if extreme
-    class_counts = y.value_counts()
-    if len(class_counts) > 1:
-        min_count = class_counts['count'].min()
-        total_count = class_counts['count'].sum()
-        minority_ratio = min_count / total_count
-        
-        if problem_type == 'binary' and minority_ratio < 0.1:
-            print(f"WARNING: Severe class imbalance detected. Minority class represents only {minority_ratio:.1%} of the data.")
-            print("Consider using stratified sampling and evaluating with AUPRC metrics.")
-        elif problem_type == 'multiclass' and minority_ratio < 0.05:
-            print(f"WARNING: Severe class imbalance detected in multi-class problem. Smallest class represents only {minority_ratio:.1%} of the data.")
-            print("Consider using stratified sampling and weighted metrics.")
-    
     # Check for missing values in features
     missing_cols = X.null_count().transpose(include_header=True).filter(pl.col('column_0')>0)['column'].to_list()
     if missing_cols:

@@ -12,7 +12,7 @@ NAX-Narcolepsy/
 ├── discriminative-modeling/       # Note-level classification (Niels Turley)
 │   ├── narcolepsy_model.py        # Feature extraction & prediction pipeline
 │   ├── model_comp.py              # Model training & evaluation framework
-│   ├── example.ipynb              # Usage instructions and example workflow
+│   ├── discriminative-model.ipynb # Usage instructions and example workflow
 │   ├── config.yaml                # Feature definitions and model paths
 │   ├── env.toml                   # Environment configuration
 │   └── models/                    # Pre-trained classifiers
@@ -52,11 +52,13 @@ Three pre-trained Random Forest classifiers:
 
 ### Usage
 
-See `discriminative-modeling/example.ipynb` for a complete walkthrough including:
+See `discriminative-modeling/discriminative-model.ipynb` for a complete walkthrough including:
 - Loading clinical data (notes, ICD codes, medications) from parquet files
 - Feature extraction using the `NarcolepsyModel` class
 - Model inference for all three classification tasks
 - Leave-one-source-out cross-validation and model comparison
+
+See `predictive-modeling/predictive-model.ipynb` for additional feature extraction code for predictive modeling
 
 ### Dependencies
 

@@ -31,7 +31,7 @@ class NarcolepsyModel():
         
         self.PolarsSafeLoader.add_constructor('!pl', polars_constructor)
 
-    def __init__(self, model_type='nt12_vs_not', config_path=None):
+    def __init__(self, model_type='nt1_vs_not', config_path=None):
         if config_path is None:
             config_path = 'config.yaml'
         self.config_path = config_path
