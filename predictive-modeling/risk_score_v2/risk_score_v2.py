@@ -993,7 +993,7 @@ def plot_nnt_analysis(all_results, prevalence=0.0008, cv_type='pooled'):
 
     Uses final-model patient-level mean scores (traj_ data).
     """
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     h = 0.5
     outcome_labels = {'any_narcolepsy': 'Any Narcolepsy (NT1 + NT2/IH)',
                       'nt1': 'NT1 Only'}
@@ -1021,10 +1021,9 @@ def plot_nnt_analysis(all_results, prevalence=0.0008, cv_type='pooled'):
         ppv = (sens * prevalence) / (
             sens * prevalence + (1 - spec) * (1 - prevalence))
         nnt = np.where(ppv > 0, 1.0 / ppv, np.nan)
-        frac_flagged = sens * prevalence + (1 - spec) * (1 - prevalence)
 
-        # --- Top row: NNT and sensitivity vs threshold ---
-        ax1 = axes[0, col_i]
+        # --- NNT and sensitivity vs threshold ---
+        ax1 = axes[col_i]
         ax1_r = ax1.twinx()
 
         valid = ~np.isnan(nnt) & np.isfinite(nnt) & (nnt > 0)
@@ -1032,12 +1031,33 @@ def plot_nnt_analysis(all_results, prevalence=0.0008, cv_type='pooled'):
                      linewidth=2, label='NNT')
         ax1_r.plot(thresholds, sens, color='#d62728', linewidth=2,
                    linestyle='--', label='Sensitivity')
-        ax1_r.plot(thresholds, frac_flagged * 100, color='#2ca02c',
-                   linewidth=1.5, linestyle=':', label='% flagged')
+
+        # Use explicit integer tick labels instead of scientific notation
+        ax1.set_yticks([10, 20, 50, 100, 200, 500, 1000])
+        ax1.set_yticklabels(['10', '20', '50', '100', '200', '500', '1000'])
+        ax1.set_ylim(5, 2000)
+
+        # Annotate NNT = 10 and NNT = 20 operating points
+        for target_nnt in [10, 20]:
+            valid_idx = np.where(valid)[0]
+            nnt_valid = nnt[valid_idx]
+            closest = valid_idx[np.argmin(np.abs(nnt_valid - target_nnt))]
+            t_val = thresholds[closest]
+            s_val = sens[closest]
+            n_val = nnt[closest]
+            ax1.plot(t_val, n_val, 'ko', markersize=5, zorder=10)
+            ax1.annotate(
+                f'NNT={n_val:.0f}\nSens={s_val:.0%}\nthr={t_val:.2f}',
+                xy=(t_val, n_val),
+                xytext=(t_val - 0.22, n_val * 0.45),
+                fontsize=7,
+                arrowprops=dict(arrowstyle='->', color='gray', lw=0.8),
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='lightyellow',
+                          edgecolor='gray', alpha=0.9))
 
         ax1.set_xlabel('Score threshold')
         ax1.set_ylabel('NNT (log scale)', color='#1f77b4')
-        ax1_r.set_ylabel('Sensitivity / % flagged', color='#d62728')
+        ax1_r.set_ylabel('Sensitivity', color='#d62728')
         ax1_r.set_ylim(0, 1.05)
         ax1.set_title(f'{outcome_labels[outcome]}')
         ax1.grid(True, alpha=0.3)
@@ -1046,37 +1066,6 @@ def plot_nnt_analysis(all_results, prevalence=0.0008, cv_type='pooled'):
         lines2, labels2 = ax1_r.get_legend_handles_labels()
         ax1.legend(lines1 + lines2, labels1 + labels2, loc='center right',
                    fontsize=8)
-
-        # --- Bottom row: NNT vs sensitivity ---
-        ax2 = axes[1, col_i]
-        valid2 = ~np.isnan(nnt) & np.isfinite(nnt) & (sens > 0.01)
-        ax2.semilogy(sens[valid2], nnt[valid2], color='#1f77b4', linewidth=2)
-        ax2.set_xlabel('Sensitivity (fraction of cases detected)')
-        ax2.set_ylabel('NNT (log scale)')
-        ax2.set_xlim(-0.05, 1.05)
-        ax2.grid(True, alpha=0.3)
-
-        # Baseline: NNT without any model (test everyone)
-        nnt_baseline = 1.0 / prevalence
-        ax2.axhline(nnt_baseline, color='gray', linewidth=1, linestyle=':',
-                     alpha=0.7)
-        ax2.text(0.5, nnt_baseline * 1.15,
-                 f'No model (NNT={nnt_baseline:.0f})',
-                 ha='center', fontsize=8, color='gray')
-
-        # Annotate specific operating points
-        for target_sens in [0.90, 0.70, 0.50, 0.30]:
-            idx = np.argmin(np.abs(sens - target_sens))
-            if valid2[idx] and not np.isnan(nnt[idx]):
-                ax2.plot(sens[idx], nnt[idx], 'ko', markersize=5, zorder=10)
-                ax2.annotate(
-                    f'Sens={sens[idx]:.0%}\nNNT={nnt[idx]:.0f}\nthr={thresholds[idx]:.2f}',
-                    xy=(sens[idx], nnt[idx]),
-                    xytext=(sens[idx] + 0.08, nnt[idx] * 1.8),
-                    fontsize=7,
-                    arrowprops=dict(arrowstyle='->', color='gray', lw=0.8),
-                    bbox=dict(boxstyle='round,pad=0.3', facecolor='lightyellow',
-                              edgecolor='gray', alpha=0.9))
 
     fig.suptitle(f'Number Needed to Test (NNT) analysis\n'
                  f'Assumed prevalence: {prevalence*100:.2f}%  '

@@ -29,6 +29,13 @@ NAX-Narcolepsy/
 │   │   └── METHODS.md             # Detailed methodology
 │   └── pooled-logistic-regression/  # Alternative PLR approach (archived)
 │
+├── paper_figures/                 # Notebooks to reproduce paper figures
+│   ├── confusion_matrices.ipynb   # Confusion matrix plots
+│   ├── roc_prc.ipynb              # ROC and precision-recall curves
+│   └── swimmer_plot.ipynb         # Swimmer plot of patient timelines
+│
+├── timeline-viewer/               # Annotation tool (git submodule)
+│
 └── LICENSE
 ```
 
@@ -108,6 +115,14 @@ This trains both outcome models (any_narcolepsy, NT1), runs all cross-validation
 ### Dependencies
 
 numpy, pandas, scikit-learn, matplotlib, seaborn, scipy, pyarrow
+
+## Paper Figures
+
+Jupyter notebooks in `paper_figures/` reproduce the main figures from the manuscript. Each notebook loads data from `../data` (relative to the notebook) and requires the discriminative-modeling data files (features, notes, models).
+
+## Annotation Tool
+
+The `timeline-viewer/` directory is a git submodule pointing to [bdsp-core/timeline-viewer](https://github.com/bdsp-core/timeline-viewer), a web application for reviewing and annotating patient clinical timelines. See its own README for setup instructions.
 
 ## License
 
