@@ -9,7 +9,7 @@ NLP-based narcolepsy detection from electronic health record (EHR) clinical note
 
 ```
 NAX-Narcolepsy/
-├── discriminative-modeling/       # Note-level classification (Niels Turley)
+├── discriminative-modeling/       # Note-level classification
 │   ├── narcolepsy_model.py        # Feature extraction & prediction pipeline
 │   ├── model_comp.py              # Model training & evaluation framework
 │   ├── discriminative-model.ipynb # Usage instructions and example workflow
