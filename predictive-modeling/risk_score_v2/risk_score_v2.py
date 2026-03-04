@@ -35,6 +35,9 @@ TOP_K_FEATURES = 100
 MAX_YEARS_BEFORE_DIAG_TRAIN = 2.5  # training window: [-2.5yr, -0.5yr]
 MAX_YEARS_BEFORE_DIAG_TEST  = 5.0  # testing/scoring window: [-5yr, 0yr]
 
+MANUSCRIPT_FIG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  '..', '..', 'manuscript', 'figures')
+
 
 # ---------------------------------------------------------------------------
 # Data loading
@@ -805,6 +808,9 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
                  fontsize=13, y=1.02)
     sns.despine(); plt.tight_layout()
     plt.savefig('v2_trajectories_combined.png', dpi=150, bbox_inches='tight')
+    os.makedirs(MANUSCRIPT_FIG_DIR, exist_ok=True)
+    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'figure8_risk_score_trajectories.png'),
+                dpi=150, bbox_inches='tight')
     plt.close()
     print("Saved: v2_trajectories_combined.png")
 
@@ -845,6 +851,8 @@ def plot_score_distributions_combined(all_results, cv_type='pooled'):
                  fontsize=13, y=1.02)
     sns.despine(); plt.tight_layout()
     plt.savefig('v2_distributions_combined.png', dpi=150, bbox_inches='tight')
+    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'figure7_risk_score_distributions.png'),
+                dpi=150, bbox_inches='tight')
     plt.close()
     print("Saved: v2_distributions_combined.png")
 
@@ -888,6 +896,8 @@ def plot_feature_importance_combined(all_results, cv_type='pooled'):
                  fontsize=13, y=1.02)
     sns.despine(); plt.tight_layout()
     plt.savefig('v2_features_combined.png', dpi=150, bbox_inches='tight')
+    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'figure9_top_predictive_features.png'),
+                dpi=150, bbox_inches='tight')
     plt.close()
     print("Saved: v2_features_combined.png")
 
@@ -941,6 +951,8 @@ def plot_performance_combined(all_results):
                  fontsize=13, y=1.02)
     sns.despine(); plt.tight_layout()
     plt.savefig('v2_performance_combined.png', dpi=150, bbox_inches='tight')
+    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'figure6_predictive_performance.png'),
+                dpi=150, bbox_inches='tight')
     plt.close()
     print("Saved: v2_performance_combined.png")
 
@@ -1073,6 +1085,8 @@ def plot_nnt_analysis(all_results, prevalence=0.0008, cv_type='pooled'):
                  fontsize=13, y=1.02)
     sns.despine(); plt.tight_layout()
     plt.savefig('v2_nnt_analysis.png', dpi=150, bbox_inches='tight')
+    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'figure12_nnt_analysis.png'),
+                dpi=150, bbox_inches='tight')
     plt.close()
     print("Saved: v2_nnt_analysis.png")
 

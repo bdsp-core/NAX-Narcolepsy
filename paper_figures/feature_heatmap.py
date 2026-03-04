@@ -35,6 +35,7 @@ sns.set_style('ticks')
 BASE = os.path.dirname(os.path.abspath(__file__))
 RISK_DIR = os.path.join(BASE, '..', 'predictive-modeling', 'risk_score_v2')
 FEAT_DIR = os.path.join(BASE, '..', 'predictive-modeling', 'features_update')
+MANUSCRIPT_FIG_DIR = os.path.join(BASE, '..', 'manuscript', 'figures')
 
 MAX_YEARS = 2.5
 N_BINS = 10
@@ -282,8 +283,15 @@ def generate_heatmap(outcome, df, nt1_case_ids, nt2_case_ids, ctrl_ids, rng):
                  fontsize=13)
 
     plt.savefig(out_file, dpi=150, bbox_inches='tight')
+    # Also save to manuscript/figures/ with proper figure numbering
+    ms_fig_map = {'any_narcolepsy': 'figure10_feature_heatmap_any_narcolepsy.png',
+                  'nt1': 'figure11_feature_heatmap_nt1.png'}
+    os.makedirs(MANUSCRIPT_FIG_DIR, exist_ok=True)
+    ms_path = os.path.join(MANUSCRIPT_FIG_DIR, ms_fig_map[outcome])
+    fig.savefig(ms_path, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"  Saved to {out_file}")
+    print(f"  Saved to {ms_path}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────
