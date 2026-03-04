@@ -187,12 +187,11 @@ def make_cross_sectional_consort():
              facecolor='#FCE4EC')
 
     fig.tight_layout()
-    fig.savefig('consort_cross_sectional.png', dpi=300, bbox_inches='tight',
-                facecolor='white')
+    os.makedirs('../manuscript/figures', exist_ok=True)
     fig.savefig('../manuscript/figures/figure1a_consort_cross_sectional.png',
                 dpi=300, bbox_inches='tight', facecolor='white')
     plt.close(fig)
-    print('Saved: consort_cross_sectional.png')
+    print('Saved: manuscript/figures/figure1a_consort_cross_sectional.png')
 
 
 # =============================================================================
@@ -325,12 +324,11 @@ def make_longitudinal_consort():
              facecolor='#FCE4EC')
 
     fig.tight_layout()
-    fig.savefig('consort_longitudinal.png', dpi=300, bbox_inches='tight',
-                facecolor='white')
+    os.makedirs('../manuscript/figures', exist_ok=True)
     fig.savefig('../manuscript/figures/figure1b_consort_longitudinal.png',
                 dpi=300, bbox_inches='tight', facecolor='white')
     plt.close(fig)
-    print('Saved: consort_longitudinal.png')
+    print('Saved: manuscript/figures/figure1b_consort_longitudinal.png')
 
 
 if __name__ == '__main__':
