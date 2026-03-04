@@ -173,7 +173,7 @@ if __name__ == '__main__':
     )
 
     os.makedirs(MANUSCRIPT_FIG_DIR, exist_ok=True)
-    out_path = os.path.join(MANUSCRIPT_FIG_DIR, 'efigure1_swimmer_plot.png')
+    out_path = os.path.join(MANUSCRIPT_FIG_DIR, 'efigure10_swimmer_plot.png')
     fig.savefig(out_path, dpi=150, bbox_inches='tight', facecolor='white')
     plt.close(fig)
     print(f"Saved: {out_path}")

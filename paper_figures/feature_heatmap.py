@@ -137,8 +137,8 @@ def generate_heatmap(outcome, df, nt1_case_ids, nt2_case_ids, ctrl_ids, rng):
     }
 
     pickle_file = os.path.join(RISK_DIR, f'v2_results_{outcome}.pickle')
-    ms_fig_map = {'any_narcolepsy': 'figure10_feature_heatmap_any_narcolepsy.png',
-                  'nt1': 'figure11_feature_heatmap_nt1.png'}
+    ms_fig_map = {'any_narcolepsy': 'efigure8_feature_heatmap_any_narcolepsy.png',
+                  'nt1': 'efigure9_feature_heatmap_nt1.png'}
     out_file = os.path.join(MANUSCRIPT_FIG_DIR, ms_fig_map[outcome])
 
     # ── Load final model ──────────────────────────────────────────────────

@@ -808,10 +808,10 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
                  fontsize=13, y=1.02)
     sns.despine(); plt.tight_layout()
     os.makedirs(MANUSCRIPT_FIG_DIR, exist_ok=True)
-    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'figure8_risk_score_trajectories.png'),
+    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'figure2_risk_score_trajectories.png'),
                 dpi=150, bbox_inches='tight')
     plt.close()
-    print("Saved: figure8_risk_score_trajectories.png")
+    print("Saved: figure2_risk_score_trajectories.png")
 
 
 def plot_score_distributions_combined(all_results, cv_type='pooled'):
@@ -849,10 +849,10 @@ def plot_score_distributions_combined(all_results, cv_type='pooled'):
                  'Cases (blue) vs Controls (orange)',
                  fontsize=13, y=1.02)
     sns.despine(); plt.tight_layout()
-    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'figure7_risk_score_distributions.png'),
+    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'efigure6_risk_score_distributions.png'),
                 dpi=150, bbox_inches='tight')
     plt.close()
-    print("Saved: figure7_risk_score_distributions.png")
+    print("Saved: efigure6_risk_score_distributions.png")
 
 
 def plot_feature_importance_combined(all_results, cv_type='pooled'):
@@ -893,10 +893,10 @@ def plot_feature_importance_combined(all_results, cv_type='pooled'):
                  'Blue = higher risk, Orange = lower risk',
                  fontsize=13, y=1.02)
     sns.despine(); plt.tight_layout()
-    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'figure9_top_predictive_features.png'),
+    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'efigure7_top_predictive_features.png'),
                 dpi=150, bbox_inches='tight')
     plt.close()
-    print("Saved: figure9_top_predictive_features.png")
+    print("Saved: efigure7_top_predictive_features.png")
 
 
 def plot_performance_combined(all_results):
@@ -947,10 +947,10 @@ def plot_performance_combined(all_results):
                  'Dots = per-fold (CV) or per-site (LOSO)',
                  fontsize=13, y=1.02)
     sns.despine(); plt.tight_layout()
-    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'figure6_predictive_performance.png'),
+    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'efigure5_predictive_performance.png'),
                 dpi=150, bbox_inches='tight')
     plt.close()
-    print("Saved: figure6_predictive_performance.png")
+    print("Saved: efigure5_predictive_performance.png")
 
 
 def save_loso_table(all_results):
@@ -1080,10 +1080,10 @@ def plot_nnt_analysis(all_results, prevalence=0.0008, cv_type='pooled'):
                  f'(1 in {1/prevalence:.0f})',
                  fontsize=13, y=1.02)
     sns.despine(); plt.tight_layout()
-    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'figure12_nnt_analysis.png'),
+    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'figure3_nnt_analysis.png'),
                 dpi=150, bbox_inches='tight')
     plt.close()
-    print("Saved: figure12_nnt_analysis.png")
+    print("Saved: figure3_nnt_analysis.png")
 
 
 # ---------------------------------------------------------------------------

@@ -24,11 +24,11 @@ If successful, such an approach could be deployed as an EHR-integrated screening
 
 ***Study Design and Data Sources***
 
-We used electronic health record data from 5 academic medical centers participating in the Brain Data Science Platform (BDSP): Boston Children's Hospital (BCH), Beth Israel Deaconess Medical Center (BIDMC), Emory University Hospital (Emory), Massachusetts General Brigham (MGB), and Stanford University Medical Center (Stanford). Each site contributed comprehensive EHR data including demographics, ICD diagnosis codes, medication orders, and unstructured clinical notes. Stanford and Emory cohorts include only patients who have visited their respective sleep clinics, whereas BCH, BIDMC, and MGB include broader patient populations. A swimmer plot illustrating the temporal coverage of the narcolepsy patient cohort across sites is provided in eFigure 1.
+We used electronic health record data from 5 academic medical centers participating in the Brain Data Science Platform (BDSP): Boston Children's Hospital (BCH), Beth Israel Deaconess Medical Center (BIDMC), Emory University Hospital (Emory), Massachusetts General Brigham (MGB), and Stanford University Medical Center (Stanford). Each site contributed comprehensive EHR data including demographics, ICD diagnosis codes, medication orders, and unstructured clinical notes. Stanford and Emory cohorts include only patients who have visited their respective sleep clinics, whereas BCH, BIDMC, and MGB include broader patient populations. A swimmer plot illustrating the temporal coverage of the narcolepsy patient cohort across sites is provided in eFigure 10.
 
 This study was conducted under IRB protocols approved and overseen by the BIDMC ethics committee (protocols 2024P000807, 2022P000417, 2024P000804), which granted a waiver of consent for retrospective analysis of de-identified EHR data.
 
-We developed two distinct analytic approaches using overlapping but differently constructed cohorts, as described below and illustrated in the CONSORT diagrams (Figures 1A and 1B).
+We developed two distinct analytic approaches using overlapping but differently constructed cohorts, as described below and illustrated in the CONSORT diagrams (eFigures 1 and 2).
 
 ***Feature Extraction***
 
@@ -48,7 +48,7 @@ For the cross-sectional analysis, we constructed an enriched dataset optimized f
 
 We defined three sampling groups for both NT1 and NT2/IH based on ICD codes and medication patterns (Supplementary Material 1): (1) "almost certainly positive" (NT1+ or NT2/IH+): patients with 3 or more disease-specific ICD codes, no ICD codes for the other narcolepsy subtype, and at least 1 narcolepsy-relevant medication; (2) "almost certainly negative" (NT1- or NT2/IH-): patients with no narcolepsy ICD codes and no narcolepsy medications; and (3) "maybe" (NT1? or NT2/IH?): patients not meeting positive or negative criteria, with at least 1 relevant ICD code and no codes for the other subtype. Approximately 250 patients were selected from each site per classification task, dependent on data availability.
 
-For each selected patient, we sampled clinical notes filtering to those with more than 500 words. For patients in the "almost certainly positive" group, we additionally required at least 1 narcolepsy-related keyword in the note. Each site contributed approximately 1,800 notes, with roughly 300 notes per classification category (6 categories: NT1+, NT1-, NT1?, NT2/IH+, NT2/IH-, NT2/IH?). The resulting cross-sectional dataset comprised 6,498 patients and 8,990 clinical notes across all 5 sites (Table 1A).
+For each selected patient, we sampled clinical notes filtering to those with more than 500 words. For patients in the "almost certainly positive" group, we additionally required at least 1 narcolepsy-related keyword in the note. Each site contributed approximately 1,800 notes, with roughly 300 notes per classification category (6 categories: NT1+, NT1-, NT1?, NT2/IH+, NT2/IH-, NT2/IH?). The resulting cross-sectional dataset comprised 6,498 patients and 8,990 clinical notes across all 5 sites (Table 1).
 
 ***Narcolepsy Ascertainment (Ground Truth Labeling)***
 
@@ -56,7 +56,7 @@ We performed manual chart annotation of the selected clinical notes using a cust
 
 Six physician annotators were recruited. Each annotator reviewed an initial calibration batch of 100 notes. After adjudicating discrepancies and refining the SOP, each annotator was assigned their own batch of notes. The annotation tool highlighted narcolepsy-relevant terms and allowed annotators to classify each note as indicating: (1) NT1 (>80% confidence the note indicates NT1), (2) NT2/IH (>80% confidence the note indicates NT2/IH), (3) Unclear (50-80% confidence the note indicates narcolepsy of either type), or (4) Absent (>80% confidence the note does not indicate narcolepsy). Of the 8,990 annotated notes, 296 were classified as "Unclear" and excluded from model training, leaving 8,694 notes with definitive labels (Table 2).
 
-Of the 8,694 notes with definitive labels, 620 (7.1%) were classified as NT1, 360 (4.1%) as NT2/IH, and 7,714 (88.7%) as Absent. The distribution of NT1-positive notes varied across sites: BCH contributed 194, BIDMC 265, Emory 56, MGB 77, and Stanford 28. NT2/IH-positive notes were similarly distributed: BCH 46, BIDMC 126, Emory 71, MGB 61, and Stanford 56 (Table 2).
+Of the 8,694 notes with definitive labels, 620 (7.1%) were classified as NT1, 360 (4.1%) as NT2/IH, and 7,714 (88.7%) as Absent. The distribution of NT1-positive notes varied across sites: BCH contributed 194, BIDMC 265, Emory 56, MGB 77, and Stanford 28. NT2/IH-positive notes were similarly distributed: BCH 46, BIDMC 126, Emory 71, MGB 61, and Stanford 56 (Table 1).
 
 ***Cross-Sectional Classification Model Development***
 
@@ -81,7 +81,7 @@ For the longitudinal analysis, we used a broader cohort encompassing all availab
 
 The initial cohort comprised 13,342 patients (1,022,458 clinical visits): 282 confirmed NT1 cases, 314 confirmed NT2/IH cases (596 total narcolepsy cases), and 12,746 non-narcolepsy controls from both disease-specific datasets (with no overlapping patient IDs between datasets).
 
-The following filtering steps were applied sequentially (Table 3):
+The following filtering steps were applied sequentially (eTable 1):
 
 1. **Gap exclusion**: Patients with gaps exceeding 5 years between consecutive visits were excluded, removing 1,754 patients (remaining: 11,588 patients, 876,318 visits).
 2. **Visit subsampling**: To limit computational burden and prevent overrepresentation of frequently-seen patients, visits were subsampled to a maximum of 20 per patient, preserving the first and last encounters (remaining: 164,383 visits).
@@ -91,7 +91,7 @@ The following filtering steps were applied sequentially (Table 3):
 
 To evaluate the model's ability to identify narcolepsy risk from pre-diagnostic clinical data, we implemented a temporal exclusion design. For diagnosed patients, training data were restricted to visits occurring within a pre-diagnostic window of 2.5 years to 6 months before the date of diagnosis (horizon exclusion h = 0.5 years). This exclusion window ensures the model learns from clinical features present before the diagnostic workup period, during which narcolepsy-specific ICD codes, diagnostic test orders (e.g., MSLT), and narcolepsy-targeted medications would be expected to appear. All visits from control patients were included without temporal restriction. Patients with fewer than 2 visits after temporal filtering were excluded.
 
-After applying all filtering steps, 196 narcolepsy cases remained for the any-narcolepsy outcome model (from 539 after gap exclusion), and 66 NT1 cases remained for the NT1-only outcome model (from 258 after gap exclusion), with 11,049 controls in both analyses. The substantial case attrition reflects the requirement that cases have sufficient clinical documentation in the narrow 2-year pre-diagnostic training window (Table 3).
+After applying all filtering steps, 196 narcolepsy cases remained for the any-narcolepsy outcome model (from 539 after gap exclusion), and 66 NT1 cases remained for the NT1-only outcome model (from 258 after gap exclusion), with 11,049 controls in both analyses. The substantial case attrition reflects the requirement that cases have sufficient clinical documentation in the narrow 2-year pre-diagnostic training window (eTable 1).
 
 Two outcome models were developed: (1) any narcolepsy (NT1 combined with NT2/IH) and (2) NT1 only. For the NT1-only model, NT2/IH patients were excluded entirely from both case and control groups.
 
@@ -127,47 +127,47 @@ To evaluate the potential clinical utility of the risk score as a screening tool
 
 ***Cohort Characteristics***
 
-The cross-sectional classification cohort comprised 6,498 patients and 8,990 annotated clinical notes across 5 sites (Table 1A). Patients were 52.8% female with a mean age of 44.0 years (SD 23.5); the cohort was 64.4% White, 14.4% Black or African American, and 5.6% Asian. The site-level distribution was: BIDMC 1,549 patients (1,921 notes), Stanford 1,454 patients (1,477 notes), Emory 1,294 patients (1,858 notes), BCH 1,141 patients (1,877 notes), and MGB 1,060 patients (1,857 notes). Of 8,990 annotated notes, 296 were classified as "Unclear" and excluded, yielding 8,694 notes with definitive labels for model training.
+The cross-sectional classification cohort comprised 6,498 patients and 8,990 annotated clinical notes across 5 sites (Table 1). Patients were 52.8% female with a mean age of 44.0 years (SD 23.5); the cohort was 64.4% White, 14.4% Black or African American, and 5.6% Asian. The site-level distribution was: BIDMC 1,549 patients (1,921 notes), Stanford 1,454 patients (1,477 notes), Emory 1,294 patients (1,858 notes), BCH 1,141 patients (1,877 notes), and MGB 1,060 patients (1,857 notes). Of 8,990 annotated notes, 296 were classified as "Unclear" and excluded, yielding 8,694 notes with definitive labels for model training (Table 1).
 
-The longitudinal prediction cohort initially comprised 13,342 patients with 1,022,458 clinical visits: 596 narcolepsy cases (282 NT1, 314 NT2/IH) and 12,746 controls. After sequential filtering (gap exclusion removing 1,754 patients with >5-year visit gaps, visit subsampling to max 20 per patient, and temporal windowing with h = 0.5 year horizon exclusion), 196 cases remained for the any-narcolepsy model and 66 for the NT1-only model, with 11,049 controls (Table 3). The per-site distribution of cases in the final predictive model cohort was: BCH 29 any-narcolepsy cases (16 NT1), BIDMC 48 (13 NT1), Emory 33 (9 NT1), MGB 54 (21 NT1), and Stanford 32 (7 NT1) (Supplementary Table 1).
+The longitudinal prediction cohort initially comprised 13,342 patients with 1,022,458 clinical visits: 596 narcolepsy cases (282 NT1, 314 NT2/IH) and 12,746 controls. After sequential filtering (gap exclusion removing 1,754 patients with >5-year visit gaps, visit subsampling to max 20 per patient, and temporal windowing with h = 0.5 year horizon exclusion), 196 cases remained for the any-narcolepsy model and 66 for the NT1-only model, with 11,049 controls (eTable 1). The per-site distribution of cases in the final predictive model cohort was: BCH 29 any-narcolepsy cases (16 NT1), BIDMC 48 (13 NT1), Emory 33 (9 NT1), MGB 54 (21 NT1), and Stanford 32 (7 NT1) (eTable 2).
 
-Figures 1A and 1B present the CONSORT diagrams illustrating patient flow through the cross-sectional classification and longitudinal prediction pipelines, respectively.
+eFigures 1 and 2 present the CONSORT diagrams illustrating patient flow through the cross-sectional classification and longitudinal prediction pipelines, respectively.
 
 ***Cross-Sectional Classification: NT1***
 
-All four classifiers achieved strong discriminative performance for NT1 detection, with mean AUROC values near 0.99 across all models and sites (Table 4). XGBoost (XGB) and Gradient Boosting (GBT) demonstrated the best overall balance of sensitivity and specificity. GBT achieved mean sensitivity of 0.876 (SD 0.082), mean specificity of 0.987 (SD 0.018), mean F1 of 0.850 (SD 0.070), mean AUROC of 0.994 (SD 0.003), and mean AUPRC of 0.935 (SD 0.039). XGB performed comparably, with mean sensitivity of 0.869 (SD 0.075), mean specificity of 0.990 (SD 0.011), mean F1 of 0.855 (SD 0.068), mean AUROC of 0.993 (SD 0.005), and mean AUPRC of 0.924 (SD 0.050). LR and RF achieved similarly high AUROC values (0.991 and 0.994, respectively) with mean AUPRCs of 0.906 (SD 0.054) and 0.922 (SD 0.075), but exhibited lower sensitivity, particularly RF (mean 0.722, SD 0.168). Figure 2 shows the receiver operating characteristic and precision-recall curves for all NT1 models.
+All four classifiers achieved strong discriminative performance for NT1 detection, with mean AUROC values near 0.99 across all models and sites (Table 2). XGBoost (XGB) and Gradient Boosting (GBT) demonstrated the best overall balance of sensitivity and specificity. GBT achieved mean sensitivity of 0.876 (SD 0.082), mean specificity of 0.987 (SD 0.018), mean F1 of 0.850 (SD 0.070), mean AUROC of 0.994 (SD 0.003), and mean AUPRC of 0.935 (SD 0.039). XGB performed comparably, with mean sensitivity of 0.869 (SD 0.075), mean specificity of 0.990 (SD 0.011), mean F1 of 0.855 (SD 0.068), mean AUROC of 0.993 (SD 0.005), and mean AUPRC of 0.924 (SD 0.050). LR and RF achieved similarly high AUROC values (0.991 and 0.994, respectively) with mean AUPRCs of 0.906 (SD 0.054) and 0.922 (SD 0.075), but exhibited lower sensitivity, particularly RF (mean 0.722, SD 0.168). Figure 1 shows the receiver operating characteristic and precision-recall curves for all NT1 models.
 
-Site-level performance was largely consistent across BCH, BIDMC, and Emory, where sensitivity ranged from 0.73 to 0.97 depending on the model. MGB demonstrated the most variable sensitivity across classifiers, with XGB achieving 0.766 and RF achieving only 0.442, a pattern consistent with its smaller NT1-positive cohort. Stanford showed similarly variable sensitivity (0.786-0.921). AUPRC ranged from 0.817-0.976 across sites and models, with MGB and Stanford consistently yielding the lowest AUPRC values, likely attributable to their smaller NT1-positive test cohorts. Confusion matrices confirmed that false negative rates were lowest for GBT and XGB, particularly at BCH (12.4% and 10.8%, respectively) and BIDMC (9.1% and 14.3%), with MGB remaining the most challenging site (41.6% miss rate for XGB) (Figure 4).
+Site-level performance was largely consistent across BCH, BIDMC, and Emory, where sensitivity ranged from 0.73 to 0.97 depending on the model. MGB demonstrated the most variable sensitivity across classifiers, with XGB achieving 0.766 and RF achieving only 0.442, a pattern consistent with its smaller NT1-positive cohort. Stanford showed similarly variable sensitivity (0.786-0.921). AUPRC ranged from 0.817-0.976 across sites and models, with MGB and Stanford consistently yielding the lowest AUPRC values, likely attributable to their smaller NT1-positive test cohorts. Confusion matrices confirmed that false negative rates were lowest for GBT and XGB, particularly at BCH (12.4% and 10.8%, respectively) and BIDMC (9.1% and 14.3%), with MGB remaining the most challenging site (41.6% miss rate for XGB) (eFigure 3).
 
 ***Cross-Sectional Classification: NT2/IH***
 
-Classification of NT2/IH presented a substantially more challenging task compared to NT1, with all models demonstrating lower sensitivity despite maintaining high specificity. AUROC remained high across models and sites (range: 0.950-0.992), reflecting strong rank-order discrimination. However, AUPRC was reduced relative to NT1, with mean values ranging from 0.692 (SD 0.085, RF) to 0.778 (SD 0.064, XGB). This divergence between AUROC and AUPRC is expected under low NT2/IH prevalence (approximately 4-8% of the study population): AUROC is relatively insensitive to class imbalance, whereas AUPRC directly captures the precision-recall tradeoff and is more informative when positives are rare (Table 5).
+Classification of NT2/IH presented a substantially more challenging task compared to NT1, with all models demonstrating lower sensitivity despite maintaining high specificity. AUROC remained high across models and sites (range: 0.950-0.992), reflecting strong rank-order discrimination. However, AUPRC was reduced relative to NT1, with mean values ranging from 0.692 (SD 0.085, RF) to 0.778 (SD 0.064, XGB). This divergence between AUROC and AUPRC is expected under low NT2/IH prevalence (approximately 4-8% of the study population): AUROC is relatively insensitive to class imbalance, whereas AUPRC directly captures the precision-recall tradeoff and is more informative when positives are rare (Table 2).
 
-XGB achieved the highest overall balance for NT2/IH, with mean sensitivity of 0.570 (SD 0.117), mean specificity of 0.995 (SD 0.003), mean F1 of 0.675 (SD 0.104), mean AUROC of 0.984 (SD 0.007), and mean AUPRC of 0.778 (SD 0.064). GBT performed comparably (sensitivity 0.621, SD 0.056; F1 0.667, SD 0.039; AUROC 0.976, SD 0.011; AUPRC 0.718, SD 0.071). LR demonstrated lower sensitivity (0.462, SD 0.096) and F1 (0.575, SD 0.075). RF showed the most severe sensitivity deficit (mean 0.216, SD 0.143), including complete failure at MGB (0% sensitivity), where all NT2/IH cases were classified as negative. Figure 3 shows the ROC and precision-recall curves for all NT2/IH models.
+XGB achieved the highest overall balance for NT2/IH, with mean sensitivity of 0.570 (SD 0.117), mean specificity of 0.995 (SD 0.003), mean F1 of 0.675 (SD 0.104), mean AUROC of 0.984 (SD 0.007), and mean AUPRC of 0.778 (SD 0.064). GBT performed comparably (sensitivity 0.621, SD 0.056; F1 0.667, SD 0.039; AUROC 0.976, SD 0.011; AUPRC 0.718, SD 0.071). LR demonstrated lower sensitivity (0.462, SD 0.096) and F1 (0.575, SD 0.075). RF showed the most severe sensitivity deficit (mean 0.216, SD 0.143), including complete failure at MGB (0% sensitivity), where all NT2/IH cases were classified as negative. Figure 1 shows the ROC and precision-recall curves for all NT2/IH models.
 
-Site-level heterogeneity was more pronounced for NT2/IH than for NT1. MGB was consistently the most challenging site, with sensitivity ranging from 0.00 (RF) to 0.574 (GBT) and AUPRC values of 0.543-0.805. Stanford also showed variable performance, with sensitivity ranging from 0.386 (RF) to 0.596 (GBT and XGB). BCH, BIDMC, and Emory demonstrated more moderate but still lower sensitivity than observed for NT1. AUPRC values across sites ranged from 0.543-0.860 (Supplementary Table 2). Figure 5 shows confusion matrices for the best-performing NT2/IH model (XGB).
+Site-level heterogeneity was more pronounced for NT2/IH than for NT1. MGB was consistently the most challenging site, with sensitivity ranging from 0.00 (RF) to 0.574 (GBT) and AUPRC values of 0.543-0.805. Stanford also showed variable performance, with sensitivity ranging from 0.386 (RF) to 0.596 (GBT and XGB). BCH, BIDMC, and Emory demonstrated more moderate but still lower sensitivity than observed for NT1. AUPRC values across sites ranged from 0.543-0.860 (eTable 3). eFigure 4 shows confusion matrices for the best-performing NT2/IH model (XGB).
 
 ***Longitudinal Prediction: Model Discrimination***
 
-The longitudinal predictive model demonstrated robust discrimination for both outcomes using pre-diagnostic clinical data (Figure 6). For the any-narcolepsy model (196 cases, 11,049 controls), stratified 5-fold cross-validation yielded a mean AUC of 0.835 (range across folds: 0.771-0.893) and mean AUPRC of 0.377 (range: 0.280-0.451). LOSO cross-validation produced a mean AUC of 0.797 (range across sites: 0.740-0.894) and mean AUPRC of 0.428 (range: 0.157-0.691), confirming generalizability across institutions (Supplementary Table 1).
+The longitudinal predictive model demonstrated robust discrimination for both outcomes using pre-diagnostic clinical data (eFigure 5). For the any-narcolepsy model (196 cases, 11,049 controls), stratified 5-fold cross-validation yielded a mean AUC of 0.835 (range across folds: 0.771-0.893) and mean AUPRC of 0.377 (range: 0.280-0.451). LOSO cross-validation produced a mean AUC of 0.797 (range across sites: 0.740-0.894) and mean AUPRC of 0.428 (range: 0.157-0.691), confirming generalizability across institutions (eTable 2).
 
 For the NT1-only model (66 cases, 11,049 controls), 5-fold cross-validation yielded a mean AUC of 0.838 (range: 0.782-0.889) and mean AUPRC of 0.298 (range: 0.232-0.479). LOSO cross-validation yielded a mean AUC of 0.788 (range: 0.628-0.941) and mean AUPRC of 0.285 (range: 0.040-0.618). Performance was more variable across sites for the NT1-only model, consistent with the smaller number of cases per site (range: 7-21 NT1 cases per site). Emory showed the highest LOSO performance (AUC 0.894 for any-narcolepsy; 0.764 for NT1), while MGB showed the weakest (AUC 0.773 and 0.628, respectively), reflecting differences in cohort composition and clinical documentation practices.
 
 ***Longitudinal Prediction: Risk Score Distributions and Trajectories***
 
-The distributions of patient-level risk scores showed clear separation between cases and controls (Figure 7). Control patients' scores were concentrated near zero (median < 0.05), whereas diagnosed patients' scores were broadly distributed, with a substantial proportion receiving scores above 0.9. This separation was observed for both models.
+The distributions of patient-level risk scores showed clear separation between cases and controls (eFigure 6). Control patients' scores were concentrated near zero (median < 0.05), whereas diagnosed patients' scores were broadly distributed, with a substantial proportion receiving scores above 0.9. This separation was observed for both models.
 
-Risk score trajectories, aligned to the time of diagnosis, revealed a progressive increase in model-assigned risk among cases beginning approximately 2 years before diagnosis (Figure 8). The median case risk score (logit scale) rose steadily across the pre-diagnostic window, diverging from the relatively stable control trajectory. The time-varying AUC, computed within 1-year sliding windows, exceeded 0.80 from approximately 1.5 years before diagnosis onward, indicating that the pre-diagnostic signal is detectable well in advance of formal diagnosis.
+Risk score trajectories, aligned to the time of diagnosis, revealed a progressive increase in model-assigned risk among cases beginning approximately 2 years before diagnosis (Figure 2). The median case risk score (logit scale) rose steadily across the pre-diagnostic window, diverging from the relatively stable control trajectory. The time-varying AUC, computed within 1-year sliding windows, exceeded 0.80 from approximately 1.5 years before diagnosis onward, indicating that the pre-diagnostic signal is detectable well in advance of formal diagnosis.
 
 ***Longitudinal Prediction: Predictive Features and Feature Evolution***
 
-The features most strongly associated with narcolepsy risk reflected clinically meaningful pre-diagnostic patterns (Figure 9). For the any-narcolepsy model, the top positive-coefficient features included mentions of hypocretin, multiple sleep latency testing, modafinil, dextroamphetamine, and idiopathic hypersomnia -- reflecting the clinical workup and empiric treatment that often precedes a formal narcolepsy diagnosis. ICD codes for narcolepsy (G47.41, G47.42) retained non-zero coefficients despite the 6-month horizon exclusion, suggesting that some diagnostic coding occurs more than 6 months before the definitive diagnosis date recorded in the EHR. For the NT1-only model, Dexedrine (dextroamphetamine), hypocretin, and orexin mentions were the strongest predictors, consistent with features distinguishing NT1 from other hypersomnias.
+The features most strongly associated with narcolepsy risk reflected clinically meaningful pre-diagnostic patterns (eFigure 7). For the any-narcolepsy model, the top positive-coefficient features included mentions of hypocretin, multiple sleep latency testing, modafinil, dextroamphetamine, and idiopathic hypersomnia -- reflecting the clinical workup and empiric treatment that often precedes a formal narcolepsy diagnosis. ICD codes for narcolepsy (G47.41, G47.42) retained non-zero coefficients despite the 6-month horizon exclusion, suggesting that some diagnostic coding occurs more than 6 months before the definitive diagnosis date recorded in the EHR. For the NT1-only model, Dexedrine (dextroamphetamine), hypocretin, and orexin mentions were the strongest predictors, consistent with features distinguishing NT1 from other hypersomnias.
 
-Feature evolution heatmaps revealed distinct temporal accumulation patterns differentiating cases from controls (Figure 10). Among the 82 features retained after L1 regularization in the any-narcolepsy model (234 cases, 234 matched controls with 5 or more visits), features with positive model coefficients -- including stimulant medications, narcolepsy-related keywords, and sleep study references -- showed progressive accumulation in cases approaching diagnosis, while remaining near-absent in controls. Features with negative coefficients, representing general medical terms more prevalent in the broader clinical population, accumulated more rapidly in controls. These patterns were consistent in the NT1-only model (84 features; 81 cases, 81 matched controls), with cataplexy-related features and NT1-specific medications showing particularly strong case-control divergence (Figure 11).
+Feature evolution heatmaps revealed distinct temporal accumulation patterns differentiating cases from controls (eFigure 8). Among the 82 features retained after L1 regularization in the any-narcolepsy model (234 cases, 234 matched controls with 5 or more visits), features with positive model coefficients -- including stimulant medications, narcolepsy-related keywords, and sleep study references -- showed progressive accumulation in cases approaching diagnosis, while remaining near-absent in controls. Features with negative coefficients, representing general medical terms more prevalent in the broader clinical population, accumulated more rapidly in controls. These patterns were consistent in the NT1-only model (84 features; 81 cases, 81 matched controls), with cataplexy-related features and NT1-specific medications showing particularly strong case-control divergence (eFigure 9).
 
 ***Longitudinal Prediction: Clinical Utility***
 
-The NNT analysis demonstrated that the risk score can meaningfully enrich a screened population for narcolepsy cases (Figure 12). At an assumed prevalence of 0.08%, the baseline NNT without any screening is 1,250 (i.e., 1 in 1,250 individuals in the general population has narcolepsy). For the any-narcolepsy model, applying a score threshold of 0.95 yielded an NNT of 20 with a sensitivity of 68%, representing a 62.5-fold enrichment over the population base rate. At a more stringent threshold of 0.99, the NNT decreased to 10 (sensitivity 67%; 125-fold enrichment). For the NT1-only model, a threshold of 0.85 achieved an NNT of 20 with a sensitivity of 84%, and a threshold of 0.95 achieved an NNT of 10 with a sensitivity of 79%. These results indicate that the model can identify a high-risk subpopulation in which confirmatory diagnostic testing would have a substantially higher yield than unselected screening.
+The NNT analysis demonstrated that the risk score can meaningfully enrich a screened population for narcolepsy cases (Figure 3). At an assumed prevalence of 0.08%, the baseline NNT without any screening is 1,250 (i.e., 1 in 1,250 individuals in the general population has narcolepsy). For the any-narcolepsy model, applying a score threshold of 0.95 yielded an NNT of 20 with a sensitivity of 68%, representing a 62.5-fold enrichment over the population base rate. At a more stringent threshold of 0.99, the NNT decreased to 10 (sensitivity 67%; 125-fold enrichment). For the NT1-only model, a threshold of 0.85 achieved an NNT of 20 with a sensitivity of 84%, and a threshold of 0.95 achieved an NNT of 10 with a sensitivity of 79%. These results indicate that the model can identify a high-risk subpopulation in which confirmatory diagnostic testing would have a substantially higher yield than unselected screening.
 
 **Discussion**
 
@@ -221,9 +221,9 @@ This study was sponsored by Takeda.
 
 **Tables**
 
-Table 1A. Patient Demographics -- Cross-Sectional Classification Cohort
+Table 1. Cross-Sectional Classification Cohort Characteristics
 
-| Characteristic | Category | N | % |
+| | | N | % |
 | ----- | ----- | ----- | ----- |
 | **Overall** |  |  |  |
 |  | Total Patients | 6,498 |  |
@@ -257,39 +257,21 @@ Table 1A. Patient Demographics -- Cross-Sectional Classification Cohort
 |  | Emory -- Patients (Notes) | 1,294 (1,858) | 19.9 (20.7) |
 |  | BCH -- Patients (Notes) | 1,141 (1,877) | 17.6 (20.9) |
 |  | MGB -- Patients (Notes) | 1,060 (1,857) | 16.3 (20.7) |
+| **Annotation** |  |  |  |
+|  | NT1 | 620 | 6.9 |
+|  | NT2/IH | 360 | 4.0 |
+|  | Absent (no narcolepsy) | 7,714 | 85.8 |
+|  | Unclear (excluded) | 296 | 3.3 |
+| **Annotations by Site** | **NT1 / NT2/IH / Unclear / Absent** | **Total** |  |
+|  | BCH: 194 / 46 / 74 / 1,563 | 1,877 |  |
+|  | BIDMC: 265 / 126 / 77 / 1,453 | 1,921 |  |
+|  | Emory: 56 / 71 / 33 / 1,698 | 1,858 |  |
+|  | MGB: 77 / 61 / 73 / 1,646 | 1,857 |  |
+|  | Stanford: 28 / 56 / 39 / 1,354 | 1,477 |  |
 
-Table 2. Annotation Summary
+Table 2. Cross-Sectional Classification -- Average LOSO Cross-Validation Performance
 
-| Category | Count | % of Total |
-| ----- | ----- | ----- |
-| NT1 | 620 | 6.9 |
-| NT2/IH | 360 | 4.0 |
-| Absent (no narcolepsy) | 7,714 | 85.8 |
-| Unclear (excluded) | 296 | 3.3 |
-| **Total Annotated** | **8,990** | **100** |
-
-Table 2B. Annotation Counts by Site (Note-Level)
-
-| Site | NT1 | NT2/IH | Unclear | Absent | Total |
-| ----- | ----- | ----- | ----- | ----- | ----- |
-| BCH | 194 | 46 | 74 | 1,563 | 1,877 |
-| BIDMC | 265 | 126 | 77 | 1,453 | 1,921 |
-| Emory | 56 | 71 | 33 | 1,698 | 1,858 |
-| MGB | 77 | 61 | 73 | 1,646 | 1,857 |
-| Stanford | 28 | 56 | 39 | 1,354 | 1,477 |
-
-Table 3. Longitudinal Prediction Cohort -- Patient Flow
-
-| Filtering Step | Patients | Visits | Cases (Any Narcolepsy) | Cases (NT1) | Controls |
-| ----- | ----- | ----- | ----- | ----- | ----- |
-| Initial cohort | 13,342 | 1,022,458 | 596 | 282 | 12,746 |
-| After gap exclusion (>5 yr) | 11,588 | 876,318 | 539 | 258 | 11,049 |
-| After visit subsampling (max 20) | 11,588 | 164,383 | 539 | 258 | 11,049 |
-| After temporal window (h = 0.5 yr) | 11,245 | 155,613 | **196** | **66** | **11,049** |
-
-*Note: Gap exclusion removed 1,754 patients (24 NT1 cases, 33 NT2/IH cases, 1,697 controls) with >5-year gaps between consecutive visits. Case attrition from 539 to 196 (any narcolepsy) and from 258 to 66 (NT1) at the temporal windowing step reflects the requirement that cases have clinical visits within the pre-diagnostic training window (2.5 to 0.5 years before diagnosis). Cases without sufficient documentation in this window were excluded. Controls were not affected by temporal windowing.*
-
-Table 4. NT1 vs. Others -- Average LOSO Cross-Validation Performance (Cross-Sectional)
+**Panel A: NT1 vs. Others**
 
 | Model | Sensitivity | Specificity | F1 Score | AUROC | AUPRC |
 | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -298,9 +280,7 @@ Table 4. NT1 vs. Others -- Average LOSO Cross-Validation Performance (Cross-Sect
 | **Gradient Boosting** | 0.876 +/- 0.082 | 0.987 +/- 0.018 | 0.850 +/- 0.070 | 0.994 +/- 0.003 | 0.935 +/- 0.039 |
 | **XGBoost** | 0.869 +/- 0.075 | 0.990 +/- 0.011 | 0.855 +/- 0.068 | 0.993 +/- 0.005 | 0.924 +/- 0.050 |
 
-*All values reported as mean +/- SD across five leave-one-site-out folds.*
-
-Table 5. NT2/IH vs. Others -- Average LOSO Cross-Validation Performance (Cross-Sectional)
+**Panel B: NT2/IH vs. Others**
 
 | Model | Sensitivity | Specificity | F1 Score | AUROC | AUPRC |
 | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -313,37 +293,46 @@ Table 5. NT2/IH vs. Others -- Average LOSO Cross-Validation Performance (Cross-S
 
 **Figures**
 
-Figure 1A. CONSORT diagram illustrating patient flow through the cross-sectional classification pipeline. EHR data from 5 BDSP sites underwent stratified enrichment sampling, note selection (>500 words), and manual annotation by 6 physician annotators. Of 8,990 annotated notes, 296 with "Unclear" labels were excluded, yielding 8,694 notes with definitive labels (620 NT1, 360 NT2/IH, 7,714 Absent). Two binary classification tasks were evaluated using LOSO cross-validation with 4 classifier types. (See figures/figure1a_consort_cross_sectional.png)
+Figure 1. Receiver Operating Characteristic and Precision-Recall Curves for Cross-Sectional Classification. (A) NT1 vs. Others: ROC curves (left) and precision-recall curves (right) for all four classifier types (LR, RF, GBT, XGB). Each curve represents performance on one LOSO test site. (B) NT2/IH vs. Others: same layout. GBT and XGB consistently achieved the best balance of sensitivity and specificity for both classification tasks. (See figures/figure1a_nt1_roc_prc.png and figures/figure1b_nt2ih_roc_prc.png)
 
-Figure 1B. CONSORT diagram illustrating patient flow through the longitudinal prediction pipeline. The initial cohort of 13,342 patients (596 narcolepsy cases, 12,746 controls) was filtered through gap exclusion (removing 1,754 patients with >5-year visit gaps), visit subsampling (max 20 per patient), sparse feature removal, and temporal windowing (training window -2.5 to -0.5 years before diagnosis). Final cohorts comprised 196 any-narcolepsy cases and 66 NT1 cases with 11,049 controls. Both outcome models were evaluated using 5-fold and LOSO cross-validation. (See figures/figure1b_consort_longitudinal.png)
+Figure 2. Risk Score Trajectories. Risk score trajectories on the logit scale for cases (blue) and controls (orange), aligned to the time of diagnosis (cases) or pseudo-diagnosis (controls), spanning the 5-year pre-diagnostic window. Left panel: any-narcolepsy model. Right panel: NT1-only model. Individual patient trajectories are shown as thin lines; bold lines represent the 25th, 50th, and 75th percentile trajectories computed with a 1-year sliding window. The dashed vertical line at -0.5 years marks the horizon exclusion boundary. The bottom subpanels show the time-varying AUC within 1-year sliding windows. The green shaded region represents the training window (-2.5 to -0.5 years). (See figures/figure2_risk_score_trajectories.png)
 
-Figure 2. Receiver operating characteristic curves and precision-recall curves for NT1 vs. Others models, separated by classifier type. Each curve shows performance based on the LOSO test site. (See figures/figure2_nt1_roc_prc.png)
-
-Figure 3. Receiver operating characteristic curves and precision-recall curves for NT2/IH vs. Others models, separated by classifier type. Each curve shows performance based on the LOSO test site. (See figures/figure3_nt2ih_roc_prc.png)
-
-Figure 4. Confusion matrices for NT1 vs. Others, best-performing Gradient Boosting (GBT) model. Each matrix shows model predictions and true labels based on the LOSO test site. (See figures/figure4_nt1_confusion_matrices.png)
-
-Figure 5. Confusion matrices for NT2/IH vs. Others, best-performing XGBoost (XGB) model. Each matrix shows model predictions and true labels based on the LOSO test site. (See figures/figure5_nt2ih_confusion_matrices.png)
-
-Figure 6. Predictive Model Performance. AUC (left column) and AUPRC (right column) for the any-narcolepsy model (top row) and NT1-only model (bottom row). Results are shown for stratified 5-fold cross-validation (blue), leave-one-site-out cross-validation (orange), and resubstitution on the final model (green). Individual dots represent per-fold (5-fold CV) or per-site (LOSO) performance. All models used a 0.5-year horizon exclusion, restricting training data to visits occurring 6 months to 2.5 years before diagnosis. The any-narcolepsy model included 196 cases and 11,049 controls; the NT1-only model included 66 cases and 11,049 controls. (See figures/figure6_predictive_performance.png)
-
-Figure 7. Risk Score Distributions. Density histograms of patient-level mean risk scores from the final model, shown separately for cases (blue) and controls (orange). Top panel: any-narcolepsy model. Bottom panel: NT1-only model. Controls cluster near zero, while cases are broadly distributed with a prominent peak near 1.0. (See figures/figure7_risk_score_distributions.png)
-
-Figure 8. Risk Score Trajectories. Risk score trajectories on the logit scale for cases (blue) and controls (orange), aligned to the time of diagnosis (cases) or pseudo-diagnosis (controls), spanning the 5-year pre-diagnostic window. Left panel: any-narcolepsy model. Right panel: NT1-only model. Individual patient trajectories are shown as thin lines; bold lines represent the 25th, 50th, and 75th percentile trajectories computed with a 1-year sliding window. The dashed vertical line at -0.5 years marks the horizon exclusion boundary. The bottom subpanels show the time-varying AUC within 1-year sliding windows. The green shaded region represents the training window (-2.5 to -0.5 years). (See figures/figure8_risk_score_trajectories.png)
-
-Figure 9. Top Predictive Features. Horizontal bar charts showing the 20 features with the largest mean absolute coefficients for the any-narcolepsy model (left) and NT1-only model (right). Blue bars indicate positive coefficients (increased narcolepsy risk); orange bars indicate negative coefficients (decreased risk). Feature names reflect stemmed clinical keywords, medication names, or ICD code regex patterns; the suffix "_neg_" denotes negated mentions. (See figures/figure9_top_predictive_features.png)
-
-Figure 10. Feature Evolution Heatmaps -- Any Narcolepsy. Heatmaps showing mean cumulative feature values over the 2.5-year pre-diagnostic window for the 82 features with non-zero L1 coefficients in the any-narcolepsy model. Left panel: cases (n = 234); right panel: matched controls (n = 234). Only patients with 5 or more visits were included. Feature values were z-score normalized. Rows are ordered by model coefficient value; red rows indicate positive coefficients and blue rows indicate negative coefficients. (See figures/figure10_feature_heatmap_any_narcolepsy.png)
-
-Figure 11. Feature Evolution Heatmaps -- NT1 Only. Same as Figure 10, for the 84 features with non-zero L1 coefficients in the NT1-only model (81 cases, 81 matched controls with 5 or more visits). Cataplexy-related features, NT1-specific medications, and hypocretin/orexin mentions show particularly strong case-control divergence. (See figures/figure11_feature_heatmap_nt1.png)
-
-Figure 12. Number Needed to Test (NNT) Analysis. NNT (blue, left y-axis, log scale) and sensitivity (red dashed, right y-axis) as a function of risk score threshold for the any-narcolepsy model (left) and NT1-only model (right). NNT was computed under an assumed population prevalence of 0.08% (1 in 1,250). Annotated operating points: for the any-narcolepsy model, threshold 0.95 yields NNT = 20 (sensitivity 68%; 62.5-fold enrichment) and threshold 0.99 yields NNT = 10 (sensitivity 67%; 125-fold enrichment). For the NT1-only model, threshold 0.85 yields NNT = 20 (sensitivity 84%) and threshold 0.95 yields NNT = 10 (sensitivity 79%). (See figures/figure12_nnt_analysis.png)
+Figure 3. Number Needed to Test (NNT) Analysis. NNT (blue, left y-axis, log scale) and sensitivity (red dashed, right y-axis) as a function of risk score threshold for the any-narcolepsy model (left) and NT1-only model (right). NNT was computed under an assumed population prevalence of 0.08% (1 in 1,250). Annotated operating points: for the any-narcolepsy model, threshold 0.95 yields NNT = 20 (sensitivity 68%; 62.5-fold enrichment) and threshold 0.99 yields NNT = 10 (sensitivity 67%; 125-fold enrichment). For the NT1-only model, threshold 0.85 yields NNT = 20 (sensitivity 84%) and threshold 0.95 yields NNT = 10 (sensitivity 79%). (See figures/figure3_nnt_analysis.png)
 
 **Supplementary Materials**
 
-eFigure 1. Swimmer Plot of Narcolepsy Patient Timelines. Each horizontal line represents one patient (n = 6,447). Light gray bars indicate the span of hospital records; orange bars indicate periods with narcolepsy-related clinical notes; dark gray bars indicate death. Patients are sorted by the date of their first hospital record. The plot illustrates the temporal coverage of the cohort, spanning from the early 1990s to 2025, with most patients entering the dataset after 2010. (See figures/efigure1_swimmer_plot.png)
+eFigure 1. CONSORT Diagram -- Cross-Sectional Classification Pipeline. EHR data from 5 BDSP sites underwent stratified enrichment sampling, note selection (>500 words), and manual annotation by 6 physician annotators. Of 8,990 annotated notes, 296 with "Unclear" labels were excluded, yielding 8,694 notes with definitive labels (620 NT1, 360 NT2/IH, 7,714 Absent). Two binary classification tasks were evaluated using LOSO cross-validation with 4 classifier types. (See figures/efigure1_consort_cross_sectional.png)
 
-Supplementary Table 1. LOSO Cross-Validation Performance by Site -- Longitudinal Predictive Model
+eFigure 2. CONSORT Diagram -- Longitudinal Prediction Pipeline. The initial cohort of 13,342 patients (596 narcolepsy cases, 12,746 controls) was filtered through gap exclusion (removing 1,754 patients with >5-year visit gaps), visit subsampling (max 20 per patient), sparse feature removal, and temporal windowing (training window -2.5 to -0.5 years before diagnosis). Final cohorts comprised 196 any-narcolepsy cases and 66 NT1 cases with 11,049 controls. Both outcome models were evaluated using 5-fold and LOSO cross-validation. (See figures/efigure2_consort_longitudinal.png)
+
+eFigure 3. Confusion Matrices -- NT1 vs. Others. Confusion matrices for the best-performing Gradient Boosting (GBT) model. Each matrix shows model predictions and true labels for one LOSO test site. (See figures/efigure3_nt1_confusion_matrices.png)
+
+eFigure 4. Confusion Matrices -- NT2/IH vs. Others. Confusion matrices for the best-performing XGBoost (XGB) model. Each matrix shows model predictions and true labels for one LOSO test site. (See figures/efigure4_nt2ih_confusion_matrices.png)
+
+eFigure 5. Predictive Model Performance. AUC (left column) and AUPRC (right column) for the any-narcolepsy model (top row) and NT1-only model (bottom row). Results are shown for stratified 5-fold cross-validation (blue), leave-one-site-out cross-validation (orange), and resubstitution on the final model (green). Individual dots represent per-fold (5-fold CV) or per-site (LOSO) performance. All models used a 0.5-year horizon exclusion, restricting training data to visits occurring 6 months to 2.5 years before diagnosis. The any-narcolepsy model included 196 cases and 11,049 controls; the NT1-only model included 66 cases and 11,049 controls. (See figures/efigure5_predictive_performance.png)
+
+eFigure 6. Risk Score Distributions. Density histograms of patient-level mean risk scores from the final model, shown separately for cases (blue) and controls (orange). Top panel: any-narcolepsy model. Bottom panel: NT1-only model. Controls cluster near zero, while cases are broadly distributed with a prominent peak near 1.0. (See figures/efigure6_risk_score_distributions.png)
+
+eFigure 7. Top Predictive Features. Horizontal bar charts showing the 20 features with the largest mean absolute coefficients for the any-narcolepsy model (left) and NT1-only model (right). Blue bars indicate positive coefficients (increased narcolepsy risk); orange bars indicate negative coefficients (decreased risk). Feature names reflect stemmed clinical keywords, medication names, or ICD code regex patterns; the suffix "_neg_" denotes negated mentions. (See figures/efigure7_top_predictive_features.png)
+
+eFigure 8. Feature Evolution Heatmaps -- Any Narcolepsy. Heatmaps showing mean cumulative feature values over the 2.5-year pre-diagnostic window for the 82 features with non-zero L1 coefficients in the any-narcolepsy model. Left panel: cases (n = 234); right panel: matched controls (n = 234). Only patients with 5 or more visits were included. Feature values were z-score normalized. Rows are ordered by model coefficient value; red rows indicate positive coefficients and blue rows indicate negative coefficients. (See figures/efigure8_feature_heatmap_any_narcolepsy.png)
+
+eFigure 9. Feature Evolution Heatmaps -- NT1 Only. Same as eFigure 8, for the 84 features with non-zero L1 coefficients in the NT1-only model (81 cases, 81 matched controls with 5 or more visits). Cataplexy-related features, NT1-specific medications, and hypocretin/orexin mentions show particularly strong case-control divergence. (See figures/efigure9_feature_heatmap_nt1.png)
+
+eFigure 10. Swimmer Plot of Narcolepsy Patient Timelines. Each horizontal line represents one patient (n = 6,447). Light gray bars indicate the span of hospital records; orange bars indicate periods with narcolepsy-related clinical notes; dark gray bars indicate death. Patients are sorted by the date of their first hospital record. The plot illustrates the temporal coverage of the cohort, spanning from the early 1990s to 2025, with most patients entering the dataset after 2010. (See figures/efigure10_swimmer_plot.png)
+
+eTable 1. Longitudinal Prediction Cohort -- Patient Flow
+
+| Filtering Step | Patients | Visits | Cases (Any Narcolepsy) | Cases (NT1) | Controls |
+| ----- | ----- | ----- | ----- | ----- | ----- |
+| Initial cohort | 13,342 | 1,022,458 | 596 | 282 | 12,746 |
+| After gap exclusion (>5 yr) | 11,588 | 876,318 | 539 | 258 | 11,049 |
+| After visit subsampling (max 20) | 11,588 | 164,383 | 539 | 258 | 11,049 |
+| After temporal window (h = 0.5 yr) | 11,245 | 155,613 | **196** | **66** | **11,049** |
+
+*Note: Gap exclusion removed 1,754 patients (24 NT1 cases, 33 NT2/IH cases, 1,697 controls) with >5-year gaps between consecutive visits. Case attrition from 539 to 196 (any narcolepsy) and from 258 to 66 (NT1) at the temporal windowing step reflects the requirement that cases have clinical visits within the pre-diagnostic training window (2.5 to 0.5 years before diagnosis). Cases without sufficient documentation in this window were excluded. Controls were not affected by temporal windowing.*
+
+eTable 2. LOSO Cross-Validation Performance by Site -- Longitudinal Predictive Model
 
 | Site | Any-Narcolepsy Cases | NT1 Cases | Controls | AUC (Any-Narc) | AUPRC (Any-Narc) | AUC (NT1) | AUPRC (NT1) |
 | ----- | ----- | ----- | ----- | ----- | ----- | ----- | ----- |
@@ -354,7 +343,7 @@ Supplementary Table 1. LOSO Cross-Validation Performance by Site -- Longitudinal
 | Stanford | 32 | 7 | 646 | 0.740 | 0.462 | 0.779 | 0.040 |
 | **Mean** | **196 total** | **66 total** | **11,049 total** | **0.797** | **0.428** | **0.788** | **0.285** |
 
-Supplementary Table 2. LOSO Cross-Validation Performance by Site -- Cross-Sectional Classification
+eTable 3. LOSO Cross-Validation Performance by Site -- Cross-Sectional Classification
 
 NT1 vs. Others -- Per-Site LOSO AUROC
 
