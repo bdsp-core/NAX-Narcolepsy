@@ -29,10 +29,11 @@ NAX-Narcolepsy/
 │   │   └── METHODS.md             # Detailed methodology
 │   └── pooled-logistic-regression/  # Alternative PLR approach (archived)
 │
-├── paper_figures/                 # Notebooks to reproduce paper figures
+├── paper_figures/                 # Notebooks & scripts to reproduce paper figures
 │   ├── confusion_matrices.ipynb   # Confusion matrix plots
 │   ├── roc_prc.ipynb              # ROC and precision-recall curves
-│   └── swimmer_plot.ipynb         # Swimmer plot of patient timelines
+│   ├── swimmer_plot.ipynb         # Swimmer plot of patient timelines
+│   └── feature_heatmap.py         # Feature evolution heatmaps (cases vs controls)
 │
 ├── timeline-viewer/               # Annotation tool (git submodule)
 │
@@ -118,7 +119,9 @@ numpy, pandas, scikit-learn, matplotlib, seaborn, scipy, pyarrow
 
 ## Paper Figures
 
-Jupyter notebooks in `paper_figures/` reproduce the main figures from the manuscript. Each notebook loads data from `../data` (relative to the notebook) and requires the discriminative-modeling data files (features, notes, models).
+Jupyter notebooks and scripts in `paper_figures/` reproduce the main figures from the manuscript. Each notebook loads data from `../data` (relative to the notebook) and requires the discriminative-modeling data files (features, notes, models).
+
+`feature_heatmap.py` generates feature evolution heatmaps showing how selected predictive model features (non-zero L1 coefficients) evolve over time leading up to diagnosis in cases vs. matched controls. Run with `python feature_heatmap.py` to generate both outcome heatmaps, or pass `any_narcolepsy` or `nt1` for a single outcome.
 
 ## Annotation Tool
 
