@@ -11,12 +11,13 @@
 #   4, 5    - Confusion matrices          (paper_figures/confusion_matrices.ipynb)
 #   6-9, 12 - Predictive model figures    (predictive-modeling/risk_score_v2/risk_score_v2.py)
 #   10, 11  - Feature evolution heatmaps  (paper_figures/feature_heatmap.py)
+#   eFig 1  - Swimmer plot                (paper_figures/swimmer_plot.py)
 
 set -euo pipefail
 cd "$(dirname "$0")"
 
 echo "=== Clearing old figures ==="
-rm -f manuscript/figures/figure*.png
+rm -f manuscript/figures/figure*.png manuscript/figures/efigure*.png
 
 echo ""
 echo "=== 1. CONSORT diagrams (Figures 1A, 1B) ==="
@@ -45,6 +46,12 @@ python3 feature_heatmap.py
 cd ..
 
 echo ""
+echo "=== 6. Swimmer plot (eFigure 1) ==="
+cd paper_figures
+python3 swimmer_plot.py
+cd ..
+
+echo ""
 echo "=== Done! ==="
 echo "All figures in manuscript/figures/:"
-ls -1 manuscript/figures/figure*.png
+ls -1 manuscript/figures/*.png

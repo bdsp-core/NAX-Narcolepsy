@@ -24,7 +24,7 @@ If successful, such an approach could be deployed as an EHR-integrated screening
 
 ***Study Design and Data Sources***
 
-We used electronic health record data from 5 academic medical centers participating in the Brain Data Science Platform (BDSP): Boston Children's Hospital (BCH), Beth Israel Deaconess Medical Center (BIDMC), Emory University Hospital (Emory), Massachusetts General Brigham (MGB), and Stanford University Medical Center (Stanford). Each site contributed comprehensive EHR data including demographics, ICD diagnosis codes, medication orders, and unstructured clinical notes. Stanford and Emory cohorts include only patients who have visited their respective sleep clinics, whereas BCH, BIDMC, and MGB include broader patient populations.
+We used electronic health record data from 5 academic medical centers participating in the Brain Data Science Platform (BDSP): Boston Children's Hospital (BCH), Beth Israel Deaconess Medical Center (BIDMC), Emory University Hospital (Emory), Massachusetts General Brigham (MGB), and Stanford University Medical Center (Stanford). Each site contributed comprehensive EHR data including demographics, ICD diagnosis codes, medication orders, and unstructured clinical notes. Stanford and Emory cohorts include only patients who have visited their respective sleep clinics, whereas BCH, BIDMC, and MGB include broader patient populations. A swimmer plot illustrating the temporal coverage of the narcolepsy patient cohort across sites is provided in eFigure 1.
 
 This study was conducted under IRB protocols approved and overseen by the BIDMC ethics committee (protocols 2024P000807, 2022P000417, 2024P000804), which granted a waiver of consent for retrospective analysis of de-identified EHR data.
 
@@ -340,6 +340,8 @@ Figure 11. Feature Evolution Heatmaps -- NT1 Only. Same as Figure 10, for the 84
 Figure 12. Number Needed to Test (NNT) Analysis. NNT (blue, left y-axis, log scale) and sensitivity (red dashed, right y-axis) as a function of risk score threshold for the any-narcolepsy model (left) and NT1-only model (right). NNT was computed under an assumed population prevalence of 0.08% (1 in 1,250). Annotated operating points: for the any-narcolepsy model, threshold 0.95 yields NNT = 20 (sensitivity 68%; 62.5-fold enrichment) and threshold 0.99 yields NNT = 10 (sensitivity 67%; 125-fold enrichment). For the NT1-only model, threshold 0.85 yields NNT = 20 (sensitivity 84%) and threshold 0.95 yields NNT = 10 (sensitivity 79%). (See figures/figure12_nnt_analysis.png)
 
 **Supplementary Materials**
+
+eFigure 1. Swimmer Plot of Narcolepsy Patient Timelines. Each horizontal line represents one patient (n = 6,447). Light gray bars indicate the span of hospital records; orange bars indicate periods with narcolepsy-related clinical notes; dark gray bars indicate death. Patients are sorted by the date of their first hospital record. The plot illustrates the temporal coverage of the cohort, spanning from the early 1990s to 2025, with most patients entering the dataset after 2010. (See figures/efigure1_swimmer_plot.png)
 
 Supplementary Table 1. LOSO Cross-Validation Performance by Site -- Longitudinal Predictive Model
 
