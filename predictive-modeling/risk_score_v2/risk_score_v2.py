@@ -849,9 +849,9 @@ def plot_score_distributions_combined(all_results, cv_type='pooled'):
         ax.legend(fontsize=FONT_SIZE_LEGEND)
 
     plt.tight_layout()
-    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure6_risk_score_distributions.png'))
+    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure8_risk_score_distributions.png'))
     plt.close()
-    print("Saved: efigure6_risk_score_distributions.png")
+    print("Saved: efigure8_risk_score_distributions.png")
 
 
 def plot_feature_importance_combined(all_results, cv_type='pooled'):
@@ -890,9 +890,9 @@ def plot_feature_importance_combined(all_results, cv_type='pooled'):
         ax.set_xlabel('Mean coefficient (across CV folds)')
 
     plt.tight_layout()
-    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure7_top_predictive_features.png'))
+    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure9_top_predictive_features.png'))
     plt.close()
-    print("Saved: efigure7_top_predictive_features.png")
+    print("Saved: efigure9_top_predictive_features.png")
 
 
 def plot_performance_combined(all_results):
@@ -941,9 +941,9 @@ def plot_performance_combined(all_results):
             ax.set_title(f'{outcome_labels[outcome]} — {metric}')
 
     plt.tight_layout()
-    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure5_predictive_performance.png'))
+    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure7_predictive_performance.png'))
     plt.close()
-    print("Saved: efigure5_predictive_performance.png")
+    print("Saved: efigure7_predictive_performance.png")
 
 
 def save_loso_table(all_results):
