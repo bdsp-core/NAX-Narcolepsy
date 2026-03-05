@@ -10,6 +10,7 @@ Usage:
 """
 
 import os
+import sys
 import time
 import random
 import numpy as np
@@ -20,6 +21,10 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection, LineCollection
 from matplotlib.patches import Rectangle
 from datetime import datetime
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pub_style import apply_style, savefig as pub_savefig, CTRL_COLOR
+apply_style()
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE, '..', 'data')
@@ -165,7 +170,7 @@ if __name__ == '__main__':
         swimmer_df,
         figsize=(15, 10),
         color_map={
-            'narcolepsy': '#ff7f0e',
+            'narcolepsy': CTRL_COLOR,  # Okabe-Ito orange
             'hospital_record': '#F5F5F5',
             'death': '#C5C5C5',
         },
@@ -174,6 +179,6 @@ if __name__ == '__main__':
 
     os.makedirs(MANUSCRIPT_FIG_DIR, exist_ok=True)
     out_path = os.path.join(MANUSCRIPT_FIG_DIR, 'efigure10_swimmer_plot.png')
-    fig.savefig(out_path, dpi=150, bbox_inches='tight', facecolor='white')
+    pub_savefig(fig, out_path)
     plt.close(fig)
     print(f"Saved: {out_path}")

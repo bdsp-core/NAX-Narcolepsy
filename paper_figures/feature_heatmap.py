@@ -27,9 +27,10 @@ import matplotlib.colors as mcolors
 import matplotlib.gridspec as gridspec
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
-import seaborn as sns
 
-sns.set_style('ticks')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pub_style import apply_style, add_panel_label, savefig as pub_savefig
+apply_style()
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -285,7 +286,7 @@ def generate_heatmap(outcome, df, nt1_case_ids, nt2_case_ids, ctrl_ids, rng):
                  fontsize=13)
 
     os.makedirs(MANUSCRIPT_FIG_DIR, exist_ok=True)
-    plt.savefig(out_file, dpi=150, bbox_inches='tight')
+    pub_savefig(fig, out_file)
     plt.close()
     print(f"  Saved to {out_file}")
 

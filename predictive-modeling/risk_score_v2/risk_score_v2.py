@@ -26,9 +26,18 @@ from tqdm import tqdm
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-plt.rcParams.update({'font.size': 13})
 import seaborn as sns
-sns.set_style('ticks')
+
+# Apply shared publication style
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                '..', '..', 'paper_figures'))
+from pub_style import (apply_style, CASE_COLOR, CTRL_COLOR, AUROC_COLOR,
+                        NNT_COLOR, SENS_COLOR, FEAT_POS_COLOR, FEAT_NEG_COLOR,
+                        BAR_COLORS, add_panel_label, savefig as pub_savefig,
+                        LINE_WIDTH, LINE_WIDTH_THICK, REFERENCE_LINE_WIDTH,
+                        FONT_SIZE_ANNOTATION, FONT_SIZE_LEGEND, FONT_SIZE_TITLE,
+                        FONT_SIZE_SUPTITLE, DOUBLE_COL_IN, MAX_HEIGHT_IN)
+apply_style()
 
 MAX_VISITS_PER_PATIENT = 20
 TOP_K_FEATURES = 100
@@ -700,16 +709,19 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
     Bottom row: time-dependent AUROC.
     Columns: any_narcolepsy, NT1.
     """
-    fig, axes = plt.subplots(2, 2, figsize=(16, 11), sharex=True,
+    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL_IN, 7.5), sharex=True,
                              gridspec_kw={'height_ratios': [2.5, 1]})
     rng = np.random.RandomState(123)
     h = 0.5
 
-    outcome_labels = {'any_narcolepsy': 'Any Narcolepsy (NT1 + NT2/IH)', 'nt1': 'NT1 Only'}
+    outcome_labels = {'any_narcolepsy': 'Any narcolepsy (NT1 + NT2/IH)', 'nt1': 'NT1 only'}
+    panel_labels = [['A', 'B'], ['C', 'D']]
 
     for col_i, outcome in enumerate(['any_narcolepsy', 'nt1']):
         ax_traj = axes[0, col_i]
         ax_auc = axes[1, col_i]
+        add_panel_label(ax_traj, panel_labels[0][col_i])
+        add_panel_label(ax_auc, panel_labels[1][col_i])
         results = all_results[outcome]
         case_df, ctrl_df = _build_traj_data(results, h, pat_info, cv_type, rng)
 
@@ -729,27 +741,27 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
             for sid in ctrl_df['sid'].unique():
                 sub = ctrl_df[ctrl_df['sid'] == sid].sort_values('t_rel')
                 if len(sub) >= 2:
-                    ax_traj.plot(sub['t_rel'], sub['logit_score'], color='#ff7f0e',
+                    ax_traj.plot(sub['t_rel'], sub['logit_score'], color=CTRL_COLOR,
                                  alpha=0.12, linewidth=0.5)
                 elif len(sub) == 1:
-                    ax_traj.scatter(sub['t_rel'], sub['logit_score'], color='#ff7f0e',
+                    ax_traj.scatter(sub['t_rel'], sub['logit_score'], color=CTRL_COLOR,
                                     alpha=0.10, s=8, zorder=1)
         if len(case_df) > 0:
             for sid in case_df['sid'].unique():
                 sub = case_df[case_df['sid'] == sid].sort_values('t_rel')
                 if len(sub) >= 2:
-                    ax_traj.plot(sub['t_rel'], sub['logit_score'], color='#1f77b4',
+                    ax_traj.plot(sub['t_rel'], sub['logit_score'], color=CASE_COLOR,
                                  alpha=0.20, linewidth=0.6)
                 elif len(sub) == 1:
-                    ax_traj.scatter(sub['t_rel'], sub['logit_score'], color='#1f77b4',
+                    ax_traj.scatter(sub['t_rel'], sub['logit_score'], color=CASE_COLOR,
                                     alpha=0.15, s=10, zorder=2)
 
         # Percentile curves via sliding 1yr window
         pcts = [0.25, 0.50, 0.75]
-        pct_styles = {0.25: ('--', 1.5), 0.50: ('-', 2.5), 0.75: ('--', 1.5)}
+        pct_styles = {0.25: ('--', 1.2), 0.50: ('-', LINE_WIDTH_THICK), 0.75: ('--', 1.2)}
         for df_group, color, group_label in [
-            (ctrl_df, '#ff7f0e', 'Controls'),
-            (case_df, '#1f77b4', 'Cases'),
+            (ctrl_df, CTRL_COLOR, 'Controls'),
+            (case_df, CASE_COLOR, 'Cases'),
         ]:
             if len(df_group) == 0:
                 continue
@@ -765,17 +777,15 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
                 ax_traj.plot(t_ctr[valid], pct_dict[p][valid], color=color,
                              linestyle=ls, linewidth=lw, label=label, zorder=10)
 
-        ax_traj.axvline(0, color='k', linewidth=1.5, linestyle='--', alpha=0.7)
-        ax_traj.axvline(-h, color='gray', linewidth=1.5, linestyle='--',
-                        alpha=0.5, label='Training cutoff (-0.5yr)')
+        ax_traj.axvline(0, color='k', linewidth=REFERENCE_LINE_WIDTH, linestyle='--', alpha=0.7)
+        ax_traj.axvline(-h, color='gray', linewidth=REFERENCE_LINE_WIDTH, linestyle='--',
+                        alpha=0.5, label='Training cutoff')
         if col_i == 0:
             ax_traj.set_ylabel('Risk score (logit scale)')
 
         auc_val = results[h][cv_type]['perf']['AUC'].mean()
-        ax_traj.set_title(f'{outcome_labels[outcome]} — h={h} yr  (AUC={auc_val:.3f})',
-                          fontsize=11)
-        ax_traj.legend(loc='upper left', fontsize=8)
-        ax_traj.grid(True, alpha=0.3)
+        ax_traj.set_title(f'{outcome_labels[outcome]} (AUC = {auc_val:.3f})')
+        ax_traj.legend(loc='upper left', fontsize=FONT_SIZE_LEGEND)
 
         # === Bottom row: time-dependent AUROC ===
         if len(case_df) > 0 and len(ctrl_df) > 0:
@@ -783,33 +793,27 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
                 case_df, ctrl_df, window=1.0, step=0.1,
                 min_cases=5, min_ctrls=10)
             valid = ~np.isnan(auc_curve)
-            ax_auc.plot(t_auc[valid], auc_curve[valid], color='#2ca02c',
-                        linewidth=2.5)
+            ax_auc.plot(t_auc[valid], auc_curve[valid], color=AUROC_COLOR,
+                        linewidth=LINE_WIDTH_THICK)
             ax_auc.fill_between(t_auc[valid], 0.5, auc_curve[valid],
-                                color='#2ca02c', alpha=0.15)
+                                color=AUROC_COLOR, alpha=0.15)
 
-        ax_auc.axhline(0.5, color='gray', linewidth=1, linestyle=':', alpha=0.7)
-        ax_auc.axvline(0, color='k', linewidth=1.5, linestyle='--', alpha=0.7)
-        ax_auc.axvline(-h, color='gray', linewidth=1.5, linestyle='--', alpha=0.5)
+        ax_auc.axhline(0.5, color='gray', linewidth=0.8, linestyle=':', alpha=0.7)
+        ax_auc.axvline(0, color='k', linewidth=REFERENCE_LINE_WIDTH, linestyle='--', alpha=0.7)
+        ax_auc.axvline(-h, color='gray', linewidth=REFERENCE_LINE_WIDTH, linestyle='--', alpha=0.5)
         ax_auc.set_ylim(0.45, 1.02)
         ax_auc.set_xlabel('Years relative to diagnosis')
         if col_i == 0:
             ax_auc.set_ylabel('AUROC')
-        ax_auc.grid(True, alpha=0.3)
 
     # Shared x-axis settings
     for ax in axes.flat:
         ax.set_xlim(-2.65, 0.15)
         ax.set_xticks(np.arange(-2.5, 0.1, 0.5))
 
-    fig.suptitle('Risk score trajectories (logit scale)\n'
-                 'Cases (blue) vs Controls (orange); '
-                 'P25/P50/P75 curves (1yr sliding window)',
-                 fontsize=13, y=1.02)
-    sns.despine(); plt.tight_layout()
+    plt.tight_layout()
     os.makedirs(MANUSCRIPT_FIG_DIR, exist_ok=True)
-    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'figure2_risk_score_trajectories.png'),
-                dpi=150, bbox_inches='tight')
+    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'figure2_risk_score_trajectories.png'))
     plt.close()
     print("Saved: figure2_risk_score_trajectories.png")
 
@@ -817,14 +821,14 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
 def plot_score_distributions_combined(all_results, cv_type='pooled'):
     """Combined score distribution plot: 2x1 (any_narcolepsy, NT1), h=0.5 only.
     Uses final model scores (traj_ data) so cohort matches trajectory plot."""
-    fig, axes = plt.subplots(2, 1, figsize=(8, 8))
+    fig, axes = plt.subplots(2, 1, figsize=(DOUBLE_COL_IN, 6))
     h = 0.5
-    outcome_labels = {'any_narcolepsy': 'Any Narcolepsy (NT1 + NT2/IH)', 'nt1': 'NT1 Only'}
+    outcome_labels = {'any_narcolepsy': 'Any narcolepsy (NT1 + NT2/IH)', 'nt1': 'NT1 only'}
 
     for row_i, outcome in enumerate(['any_narcolepsy', 'nt1']):
         ax = axes[row_i]
+        add_panel_label(ax, chr(ord('A') + row_i))
         r = all_results[outcome][h][cv_type]
-        # Use traj_ data (final model, all patients) to match trajectory plot cohort
         sids = r.get('traj_sids', r['sids'])
         scores = r.get('traj_scores', r['scores'])
         y_arr = r.get('traj_y', r['y'])
@@ -834,36 +838,32 @@ def plot_score_distributions_combined(all_results, cv_type='pooled'):
 
         ctrl = pat[pat['y'] == 0]['score']
         case = pat[pat['y'] == 1]['score']
-        ax.hist(ctrl, bins=50, alpha=0.5, color='#ff7f0e',
-                label=f'Controls (n={len(ctrl)})', density=True)
-        ax.hist(case, bins=30, alpha=0.6, color='#1f77b4',
-                label=f'Cases (n={len(case)})', density=True)
+        ax.hist(ctrl, bins=50, alpha=0.5, color=CTRL_COLOR,
+                label=f'Controls (n = {len(ctrl)})', density=True)
+        ax.hist(case, bins=30, alpha=0.6, color=CASE_COLOR,
+                label=f'Cases (n = {len(case)})', density=True)
         ax.set_xlabel('Risk score (patient-level mean)')
         ax.set_ylabel('Density')
         auc_val = r['perf']['AUC'].mean()
-        ax.set_title(f'{outcome_labels[outcome]} — AUC={auc_val:.3f} (5-fold CV)')
-        ax.legend(fontsize=9)
-        ax.grid(True, alpha=0.3)
+        ax.set_title(f'{outcome_labels[outcome]} (AUC = {auc_val:.3f})')
+        ax.legend(fontsize=FONT_SIZE_LEGEND)
 
-    fig.suptitle('Risk score distributions (final model, all patients)\n'
-                 'Cases (blue) vs Controls (orange)',
-                 fontsize=13, y=1.02)
-    sns.despine(); plt.tight_layout()
-    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'efigure6_risk_score_distributions.png'),
-                dpi=150, bbox_inches='tight')
+    plt.tight_layout()
+    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure6_risk_score_distributions.png'))
     plt.close()
     print("Saved: efigure6_risk_score_distributions.png")
 
 
 def plot_feature_importance_combined(all_results, cv_type='pooled'):
     """Combined feature importance: 2x1 (any_narcolepsy, NT1), h=0.5 only."""
-    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COL_IN * 2, 6))
     h = 0.5
     top_n = 20
-    outcome_labels = {'any_narcolepsy': 'Any Narcolepsy (NT1 + NT2/IH)', 'nt1': 'NT1 Only'}
+    outcome_labels = {'any_narcolepsy': 'Any narcolepsy (NT1 + NT2/IH)', 'nt1': 'NT1 only'}
 
     for col_i, outcome in enumerate(['any_narcolepsy', 'nt1']):
         ax = axes[col_i]
+        add_panel_label(ax, chr(ord('A') + col_i))
         r = all_results[outcome][h][cv_type]
         coefs = r['coefs']
         fnames = r['feat_names']
@@ -879,22 +879,18 @@ def plot_feature_importance_combined(all_results, cv_type='pooled'):
         idx = sel[:n_show][::-1]
         names = [fnames[i][:40] for i in idx]
         vals = mean_c[idx]
-        colors = ['#1f77b4' if v > 0 else '#ff7f0e' for v in vals]
+        colors = [FEAT_POS_COLOR if v > 0 else FEAT_NEG_COLOR for v in vals]
         ax.barh(np.arange(n_show), vals, color=colors, alpha=0.8,
                 edgecolor='k', linewidth=0.5)
         ax.set_yticks(np.arange(n_show))
-        ax.set_yticklabels(names, fontsize=8)
+        ax.set_yticklabels(names)
         ax.axvline(0, color='k', linewidth=0.8)
         auc_val = r['perf']['AUC'].mean()
-        ax.set_title(f'{outcome_labels[outcome]}\nh={h} yr  (AUC={auc_val:.3f})', fontsize=11)
+        ax.set_title(f'{outcome_labels[outcome]} (AUC = {auc_val:.3f})')
         ax.set_xlabel('Mean coefficient (across CV folds)')
 
-    fig.suptitle('Top features by importance\n'
-                 'Blue = higher risk, Orange = lower risk',
-                 fontsize=13, y=1.02)
-    sns.despine(); plt.tight_layout()
-    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'efigure7_top_predictive_features.png'),
-                dpi=150, bbox_inches='tight')
+    plt.tight_layout()
+    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure7_top_predictive_features.png'))
     plt.close()
     print("Saved: efigure7_top_predictive_features.png")
 
@@ -904,16 +900,17 @@ def plot_performance_combined(all_results):
     Rows: Any Narcolepsy, NT1.  Cols: AUC, AUPRC.
     Each panel: 3 bars (Pooled CV, LOSO, Final model) with per-fold/site dots.
     """
-    fig, axes = plt.subplots(2, 2, figsize=(11, 8))
+    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL_IN, 6))
     h = 0.5
-    outcome_labels = {'any_narcolepsy': 'Any Narcolepsy (NT1 + NT2/IH)', 'nt1': 'NT1 Only'}
-    bar_colors = ['#1f77b4', '#ff7f0e', '#2ca02c']
+    outcome_labels = {'any_narcolepsy': 'Any narcolepsy (NT1 + NT2/IH)', 'nt1': 'NT1 only'}
     bar_labels = ['5-fold CV', 'LOSO', 'Final model\n(all data)']
+    panel_labels = [['A', 'B'], ['C', 'D']]
 
     for row_i, outcome in enumerate(['any_narcolepsy', 'nt1']):
         results = all_results[outcome]
         for col_i, metric in enumerate(['AUC', 'AUPRC']):
             ax = axes[row_i, col_i]
+            add_panel_label(ax, panel_labels[row_i][col_i])
 
             pooled_vals = results[h]['pooled']['perf'][metric].dropna().values
             loso_vals = results[h]['loso']['perf'][metric].dropna().values
@@ -923,17 +920,17 @@ def plot_performance_combined(all_results):
             all_dots = [pooled_vals, loso_vals, [resub_val]]
 
             for i in range(3):
-                ax.bar(i, means[i], width=0.6, color=bar_colors[i], alpha=0.35,
+                ax.bar(i, means[i], width=0.6, color=BAR_COLORS[i], alpha=0.35,
                        edgecolor='k', linewidth=0.5)
                 rng = np.random.RandomState(42)
                 jit = rng.uniform(-0.12, 0.12, size=len(all_dots[i]))
-                ax.scatter(i + jit, all_dots[i], color=bar_colors[i], s=45,
+                ax.scatter(i + jit, all_dots[i], color=BAR_COLORS[i], s=45,
                            edgecolor='k', linewidth=0.5, zorder=5, alpha=0.9)
                 ax.text(i, means[i] + 0.012, f'{means[i]:.3f}', ha='center',
-                        fontsize=9, fontweight='bold')
+                        fontsize=FONT_SIZE_ANNOTATION, fontweight='bold')
 
             ax.set_xticks(range(3))
-            ax.set_xticklabels(bar_labels, fontsize=8)
+            ax.set_xticklabels(bar_labels)
             ax.grid(True, alpha=0.3, axis='y')
 
             if metric == 'AUC':
@@ -941,14 +938,10 @@ def plot_performance_combined(all_results):
             else:
                 ax.set_ylim(0, 1.05)
 
-            ax.set_title(f'{outcome_labels[outcome]}\n{metric}', fontsize=11)
+            ax.set_title(f'{outcome_labels[outcome]} — {metric}')
 
-    fig.suptitle('Model performance comparison — h=0.5 yr\n'
-                 'Dots = per-fold (CV) or per-site (LOSO)',
-                 fontsize=13, y=1.02)
-    sns.despine(); plt.tight_layout()
-    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'efigure5_predictive_performance.png'),
-                dpi=150, bbox_inches='tight')
+    plt.tight_layout()
+    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure5_predictive_performance.png'))
     plt.close()
     print("Saved: efigure5_predictive_performance.png")
 
@@ -1001,10 +994,10 @@ def plot_nnt_analysis(all_results, prevalence=0.0008, cv_type='pooled'):
 
     Uses final-model patient-level mean scores (traj_ data).
     """
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COL_IN, 3.5))
     h = 0.5
-    outcome_labels = {'any_narcolepsy': 'Any Narcolepsy (NT1 + NT2/IH)',
-                      'nt1': 'NT1 Only'}
+    outcome_labels = {'any_narcolepsy': 'Any narcolepsy (NT1 + NT2/IH)',
+                      'nt1': 'NT1 only'}
 
     for col_i, outcome in enumerate(['any_narcolepsy', 'nt1']):
         results = all_results[outcome]
@@ -1030,19 +1023,20 @@ def plot_nnt_analysis(all_results, prevalence=0.0008, cv_type='pooled'):
             sens * prevalence + (1 - spec) * (1 - prevalence))
         nnt = np.where(ppv > 0, 1.0 / ppv, np.nan)
 
-        # --- NNT and sensitivity vs threshold ---
         ax1 = axes[col_i]
+        add_panel_label(ax1, chr(ord('A') + col_i))
         ax1_r = ax1.twinx()
+        # Keep right spine visible for dual axis
+        ax1_r.spines['right'].set_visible(True)
 
         valid = ~np.isnan(nnt) & np.isfinite(nnt) & (nnt > 0)
-        ax1.semilogy(thresholds[valid], nnt[valid], color='#1f77b4',
-                     linewidth=2, label='NNT')
-        ax1_r.plot(thresholds, sens, color='#d62728', linewidth=2,
+        ax1.semilogy(thresholds[valid], nnt[valid], color=NNT_COLOR,
+                     linewidth=LINE_WIDTH, label='NNT')
+        ax1_r.plot(thresholds, sens, color=SENS_COLOR, linewidth=LINE_WIDTH,
                    linestyle='--', label='Sensitivity')
 
-        # Use explicit integer tick labels instead of scientific notation
         ax1.set_yticks([10, 20, 50, 100, 200, 500, 1000])
-        ax1.set_yticklabels(['10', '20', '50', '100', '200', '500', '1000'])
+        ax1.set_yticklabels(['10', '20', '50', '100', '200', '500', '1,000'])
         ax1.set_ylim(5, 2000)
 
         # Annotate NNT = 10 and NNT = 20 operating points
@@ -1053,35 +1047,32 @@ def plot_nnt_analysis(all_results, prevalence=0.0008, cv_type='pooled'):
             t_val = thresholds[closest]
             s_val = sens[closest]
             n_val = nnt[closest]
-            ax1.plot(t_val, n_val, 'ko', markersize=5, zorder=10)
+            ax1.plot(t_val, n_val, 'ko', markersize=4, zorder=10)
             ax1.annotate(
-                f'NNT={n_val:.0f}\nSens={s_val:.0%}\nthr={t_val:.2f}',
+                f'NNT = {n_val:.0f}\nSens = {s_val:.0%}\nthr = {t_val:.2f}',
                 xy=(t_val, n_val),
                 xytext=(t_val - 0.22, n_val * 0.45),
-                fontsize=7,
+                fontsize=FONT_SIZE_ANNOTATION,
                 arrowprops=dict(arrowstyle='->', color='gray', lw=0.8),
-                bbox=dict(boxstyle='round,pad=0.3', facecolor='lightyellow',
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='#FFFFF0',
                           edgecolor='gray', alpha=0.9))
 
         ax1.set_xlabel('Score threshold')
-        ax1.set_ylabel('NNT (log scale)', color='#1f77b4')
-        ax1_r.set_ylabel('Sensitivity', color='#d62728')
+        ax1.set_ylabel('NNT (log scale)', color=NNT_COLOR)
+        ax1_r.set_ylabel('Sensitivity', color=SENS_COLOR)
         ax1_r.set_ylim(0, 1.05)
         ax1.set_title(f'{outcome_labels[outcome]}')
-        ax1.grid(True, alpha=0.3)
 
         lines1, labels1 = ax1.get_legend_handles_labels()
         lines2, labels2 = ax1_r.get_legend_handles_labels()
         ax1.legend(lines1 + lines2, labels1 + labels2, loc='center right',
-                   fontsize=8)
+                   fontsize=FONT_SIZE_LEGEND)
 
-    fig.suptitle(f'Number Needed to Test (NNT) analysis\n'
-                 f'Assumed prevalence: {prevalence*100:.2f}%  '
-                 f'(1 in {1/prevalence:.0f})',
-                 fontsize=13, y=1.02)
-    sns.despine(); plt.tight_layout()
-    plt.savefig(os.path.join(MANUSCRIPT_FIG_DIR, 'figure3_nnt_analysis.png'),
-                dpi=150, bbox_inches='tight')
+    fig.suptitle(f'NNT analysis  (prevalence: {prevalence*100:.2f}%, '
+                 f'1 in {1/prevalence:,.0f})',
+                 fontsize=FONT_SIZE_SUPTITLE, y=1.02)
+    plt.tight_layout()
+    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'figure3_nnt_analysis.png'))
     plt.close()
     print("Saved: figure3_nnt_analysis.png")
 

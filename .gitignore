@@ -240,3 +240,10 @@ longitudinal-time-to-event-model/results.pickle
 
 *pickle
 *parquet
+
+# Large binary figure formats (TIFFs generated for journal submission)
+*.tiff
+*.tif
+
+# Figure review reports (generated, not tracked)
+figure_review/reports/
