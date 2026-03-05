@@ -709,7 +709,7 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
     Bottom row: time-dependent AUROC.
     Columns: any_narcolepsy, NT1.
     """
-    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL_IN, 7.5), sharex=True,
+    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL_IN, 6.0), sharex=True,
                              gridspec_kw={'height_ratios': [2.5, 1]})
     rng = np.random.RandomState(123)
     h = 0.5

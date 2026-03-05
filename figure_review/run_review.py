@@ -13,7 +13,7 @@ Usage:
     python run_review.py manuscript/figures/figure1a*.png manuscript/figures/figure2*.png
 
     # Run only specific agents:
-    python run_review.py --agents story,composition
+    python run_review.py --agents story,composition,caption
 
     # Dry run (show what would be reviewed):
     python run_review.py --dry-run
@@ -276,7 +276,8 @@ def main():
     parser.add_argument("--agents", type=str, default=None,
                         help="Comma-separated agent names to run "
                              "(default: all). Options: story, composition, "
-                             "color, typography, format, consistency")
+                             "color, typography, format, caption, statistics, "
+                             "consistency")
     parser.add_argument("--model", type=str, default=DEFAULT_MODEL,
                         help=f"Model to use (default: {DEFAULT_MODEL})")
     parser.add_argument("--dry-run", action="store_true",
