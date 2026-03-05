@@ -714,7 +714,7 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
     rng = np.random.RandomState(123)
     h = 0.5
 
-    outcome_labels = {'any_narcolepsy': 'Any narcolepsy (NT1 + NT2/IH)', 'nt1': 'NT1 only'}
+    outcome_labels = {'any_narcolepsy': 'Any narcolepsy', 'nt1': 'NT1 only'}
     panel_labels = [['A', 'B'], ['C', 'D']]
 
     for col_i, outcome in enumerate(['any_narcolepsy', 'nt1']):
@@ -759,6 +759,7 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
         # Percentile curves via sliding 1yr window
         pcts = [0.25, 0.50, 0.75]
         pct_styles = {0.25: ('--', 1.2), 0.50: ('-', LINE_WIDTH_THICK), 0.75: ('--', 1.2)}
+        p50_endpoints = {}  # store rightmost P50 point for inline labels
         for df_group, color, group_label in [
             (ctrl_df, CTRL_COLOR, 'Controls'),
             (case_df, CASE_COLOR, 'Cases'),
@@ -769,23 +770,29 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
             v_arr = df_group['logit_score'].values
             t_ctr, pct_dict = _sliding_window_percentiles(
                 t_arr, v_arr, pcts, window=1.0, step=0.1, min_count=10)
-            n_grp = n_cases if group_label == 'Cases' else n_ctrls
             for p in pcts:
                 ls, lw = pct_styles[p]
                 valid = ~np.isnan(pct_dict[p])
-                label = f'{group_label} P{int(p*100)} (n={n_grp})' if p == 0.50 else None
                 ax_traj.plot(t_ctr[valid], pct_dict[p][valid], color=color,
-                             linestyle=ls, linewidth=lw, label=label, zorder=10)
+                             linestyle=ls, linewidth=lw, zorder=10)
+                if p == 0.50 and valid.any():
+                    # Store endpoint for inline label
+                    idx = np.where(valid)[0][-1]
+                    p50_endpoints[group_label] = (t_ctr[idx], pct_dict[p][idx], color)
 
-        ax_traj.axvline(0, color='k', linewidth=REFERENCE_LINE_WIDTH, linestyle='--', alpha=0.7)
-        ax_traj.axvline(-h, color='gray', linewidth=REFERENCE_LINE_WIDTH, linestyle='--',
-                        alpha=0.5, label='Training cutoff')
+        # Inline labels on P50 curves (Tufte style)
+        for grp, (t_end, y_end, clr) in p50_endpoints.items():
+            n_grp = n_cases if grp == 'Cases' else n_ctrls
+            ax_traj.annotate(f'{grp} (n={n_grp})',
+                             xy=(t_end, y_end), xytext=(6, 0),
+                             textcoords='offset points',
+                             fontsize=FONT_SIZE_ANNOTATION, color=clr,
+                             va='center', ha='left', fontweight='bold', zorder=15)
+
         if col_i == 0:
             ax_traj.set_ylabel('Risk score (logit scale)')
 
-        auc_val = results[h][cv_type]['perf']['AUC'].mean()
-        ax_traj.set_title(f'{outcome_labels[outcome]} (AUC = {auc_val:.3f})')
-        ax_traj.legend(loc='upper left', fontsize=FONT_SIZE_LEGEND)
+        ax_traj.set_title(f'{outcome_labels[outcome]}')
 
         # === Bottom row: time-dependent AUROC ===
         if len(case_df) > 0 and len(ctrl_df) > 0:
@@ -793,15 +800,15 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
                 case_df, ctrl_df, window=1.0, step=0.1,
                 min_cases=5, min_ctrls=10)
             valid = ~np.isnan(auc_curve)
-            ax_auc.plot(t_auc[valid], auc_curve[valid], color=AUROC_COLOR,
+            ax_auc.plot(t_auc[valid], auc_curve[valid], color='0.3',
                         linewidth=LINE_WIDTH_THICK)
             ax_auc.fill_between(t_auc[valid], 0.5, auc_curve[valid],
-                                color=AUROC_COLOR, alpha=0.15)
+                                color='0.6', alpha=0.10)
 
         ax_auc.axhline(0.5, color='gray', linewidth=0.8, linestyle=':', alpha=0.7)
-        ax_auc.axvline(0, color='k', linewidth=REFERENCE_LINE_WIDTH, linestyle='--', alpha=0.7)
-        ax_auc.axvline(-h, color='gray', linewidth=REFERENCE_LINE_WIDTH, linestyle='--', alpha=0.5)
-        ax_auc.set_ylim(0.45, 1.02)
+        ax_auc.axhline(0.8, color='gray', linewidth=0.6, linestyle='--', alpha=0.4)
+        ax_auc.axhline(0.9, color='gray', linewidth=0.6, linestyle='--', alpha=0.4)
+        ax_auc.set_ylim(0.50, 1.02)
         ax_auc.set_xlabel('Years relative to diagnosis')
         if col_i == 0:
             ax_auc.set_ylabel('AUROC')
@@ -1040,22 +1047,46 @@ def plot_nnt_analysis(all_results, prevalence=0.0008, cv_type='pooled'):
         ax1.set_ylim(5, 2000)
 
         # Annotate NNT = 10 and NNT = 20 operating points
+        op_points = []
         for target_nnt in [10, 20]:
             valid_idx = np.where(valid)[0]
             nnt_valid = nnt[valid_idx]
             closest = valid_idx[np.argmin(np.abs(nnt_valid - target_nnt))]
-            t_val = thresholds[closest]
-            s_val = sens[closest]
-            n_val = nnt[closest]
-            ax1.plot(t_val, n_val, 'ko', markersize=4, zorder=10)
-            ax1.annotate(
-                f'NNT = {n_val:.0f}\nSens = {s_val:.0%}\nthr = {t_val:.2f}',
-                xy=(t_val, n_val),
-                xytext=(t_val - 0.22, n_val * 0.45),
-                fontsize=FONT_SIZE_ANNOTATION,
-                arrowprops=dict(arrowstyle='->', color='gray', lw=0.8),
-                bbox=dict(boxstyle='round,pad=0.3', facecolor='#FFFFF0',
-                          edgecolor='gray', alpha=0.9))
+            op_points.append((thresholds[closest], sens[closest], nnt[closest]))
+
+        for i, (t_val, s_val, n_val) in enumerate(op_points):
+            # Horizontal NNT dashed line (blue, matching NNT curve)
+            ax1.axhline(n_val, color=NNT_COLOR, linestyle=':', linewidth=0.5,
+                        alpha=0.5)
+            # Vertical dashed line at the threshold
+            ax1.axvline(t_val, color='gray', linestyle=':', linewidth=0.5,
+                        alpha=0.6)
+            # Blue dot on NNT curve
+            ax1.plot(t_val, n_val, 'o', color=NNT_COLOR, markersize=4, zorder=10)
+            # NNT label near the dot, offset left to avoid overlapping curve
+            ax1.text(t_val - 0.08, n_val, f'NNT = {n_val:.0f}',
+                     fontsize=FONT_SIZE_ANNOTATION, color=NNT_COLOR,
+                     fontweight='bold', va='bottom', ha='right')
+
+            # Horizontal sensitivity dashed line (matching sens curve color)
+            ax1_r.axhline(s_val, color=SENS_COLOR, linestyle=':', linewidth=0.5,
+                          alpha=0.5)
+            # Dot on sensitivity curve
+            ax1_r.plot(t_val, s_val, 'o', color=SENS_COLOR, markersize=4, zorder=10)
+
+        # Sensitivity labels: lower (NNT=10) to left, upper (NNT=20) slightly right
+        s_vals = [p[1] for p in op_points]
+        if len(s_vals) == 2 and abs(s_vals[0] - s_vals[1]) < 0.08:
+            y_offsets = [-0.055, 0.03]
+        else:
+            y_offsets = [0.0, 0.0]
+        # op_points[0] = NNT=10 (lower sens), op_points[1] = NNT=20 (higher sens)
+        x_nudges = [-0.03, 0.005]   # left for lower, slightly right for upper
+        h_aligns = ['right', 'left']
+        for i, (t_val, s_val, n_val) in enumerate(op_points):
+            ax1_r.text(t_val + x_nudges[i], s_val + y_offsets[i], f'{s_val:.0%}',
+                       fontsize=FONT_SIZE_ANNOTATION, color=SENS_COLOR,
+                       fontweight='bold', va='bottom', ha=h_aligns[i])
 
         ax1.set_xlabel('Score threshold')
         ax1.set_ylabel('NNT (log scale)', color=NNT_COLOR)
@@ -1063,10 +1094,17 @@ def plot_nnt_analysis(all_results, prevalence=0.0008, cv_type='pooled'):
         ax1_r.set_ylim(0, 1.05)
         ax1.set_title(f'{outcome_labels[outcome]}')
 
-        lines1, labels1 = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax1_r.get_legend_handles_labels()
-        ax1.legend(lines1 + lines2, labels1 + labels2, loc='center right',
-                   fontsize=FONT_SIZE_LEGEND)
+        # Tufte-style inline labels on the curves (no legend box)
+        # Place NNT label at ~30% along the x-axis
+        mid_idx = len(thresholds) // 3
+        if valid[mid_idx]:
+            ax1.text(thresholds[mid_idx], nnt[mid_idx] * 1.3, 'NNT',
+                     fontsize=FONT_SIZE_LEGEND, color=NNT_COLOR,
+                     fontweight='bold', va='bottom', ha='center')
+        # Place Sensitivity label near the start of the curve
+        ax1_r.text(thresholds[mid_idx], sens[mid_idx] + 0.03, 'Sensitivity',
+                   fontsize=FONT_SIZE_LEGEND, color=SENS_COLOR,
+                   fontweight='bold', va='bottom', ha='center')
 
     fig.suptitle(f'NNT analysis  (prevalence: {prevalence*100:.2f}%, '
                  f'1 in {1/prevalence:,.0f})',
