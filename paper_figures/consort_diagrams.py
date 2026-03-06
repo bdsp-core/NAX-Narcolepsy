@@ -71,7 +71,7 @@ SHARED_START_BODY = 'BCH, BIDMC, Emory, MGB, Stanford\n13,342 patients  |  596 n
 # eFigure 1: Cross-Sectional Classification Pipeline
 # =============================================================================
 def make_cross_sectional_consort():
-    fig, ax = plt.subplots(figsize=(9, 11))
+    fig, ax = plt.subplots(figsize=(11, 11))
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis('off')
@@ -120,40 +120,56 @@ def make_cross_sectional_consort():
               '8,694 notes with definitive labels\n'
               '(271 NT1 patients, 280 NT2/IH patients)')
 
-    # --- Split into two tasks ---
+    # --- Split into three tasks ---
     y6 = 0.30
-    left_x = 0.24
-    right_x = 0.66
+    left_x = 0.16
+    mid_x = 0.50
+    right_x = 0.84
 
     draw_arrow(ax, cx, y5 - 0.04, left_x, y6 + 0.025)
+    draw_arrow(ax, cx, y5 - 0.04, mid_x, y6 + 0.025)
     draw_arrow(ax, cx, y5 - 0.04, right_x, y6 + 0.025)
 
     draw_text(ax, left_x, y6,
               'NT1 vs. Others',
               'Positive: 620 notes\n'
-              'Negative: 8,074 notes (NT2/IH + Absent)')
+              'Negative: 8,074 notes\n'
+              '(NT2/IH + Absent)')
 
-    draw_text(ax, right_x, y6,
+    draw_text(ax, mid_x, y6,
               'NT2/IH vs. Others',
               'Positive: 360 notes\n'
-              'Negative: 8,334 notes (NT1 + Absent)')
+              'Negative: 8,334 notes\n'
+              '(NT1 + Absent)')
+
+    draw_text(ax, right_x, y6,
+              'Any Narcolepsy vs. Others',
+              'Positive: 980 notes\n'
+              'Negative: 7,714 notes\n'
+              '(Absent only)')
 
     # --- Evaluation ---
-    # Performance numbers will be filled in after retraining
-    y7 = 0.14
-    draw_arrow(ax, left_x, y6 - 0.045, left_x, y7 + 0.025)
-    draw_arrow(ax, right_x, y6 - 0.045, right_x, y7 + 0.025)
+    y7 = 0.12
+    draw_arrow(ax, left_x, y6 - 0.055, left_x, y7 + 0.025)
+    draw_arrow(ax, mid_x, y6 - 0.055, mid_x, y7 + 0.025)
+    draw_arrow(ax, right_x, y6 - 0.055, right_x, y7 + 0.025)
 
     draw_text(ax, left_x, y7,
               'LOSO Cross-Validation',
               '4 classifiers: LR, RF, GBT, XGB\n'
-              'Best: RF (AUROC 0.995, Sens 0.890)',
+              'Best: RF (AUROC 0.996)',
+              fontsize=8)
+
+    draw_text(ax, mid_x, y7,
+              'LOSO Cross-Validation',
+              '4 classifiers: LR, RF, GBT, XGB\n'
+              'Best: XGB (AUROC 0.977)',
               fontsize=8)
 
     draw_text(ax, right_x, y7,
               'LOSO Cross-Validation',
               '4 classifiers: LR, RF, GBT, XGB\n'
-              'Best: XGB (AUROC 0.977, Sens 0.586)',
+              'Best: XGB (AUROC 0.992)',
               fontsize=8)
 
     fig.tight_layout()
@@ -168,7 +184,7 @@ def make_cross_sectional_consort():
 # eFigure 2: Longitudinal Prediction Pipeline
 # =============================================================================
 def make_longitudinal_consort():
-    fig, ax = plt.subplots(figsize=(9, 12))
+    fig, ax = plt.subplots(figsize=(11, 12))
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis('off')
@@ -231,44 +247,63 @@ def make_longitudinal_consort():
               '0.5-year horizon exclusion to avoid diagnostic workup')
 
     draw_side_text(ax, cx + 0.22, y6 - 0.005, excl_x, y6 - 0.04,
-                   'Cases excluded:\n'
-                   '343 any-narcolepsy, 192 NT1\n'
-                   '(insufficient pre-dx visits)',
+                   'Cases excluded for\n'
+                   'insufficient pre-dx visits',
                    fontsize=7.5)
 
-    # --- Split into two outcome models ---
+    # --- Split into three outcome models ---
     y7 = 0.19
-    left_x = 0.22
-    right_x = 0.64
+    left_x = 0.16
+    mid_x = 0.50
+    right_x = 0.84
     draw_arrow(ax, cx, y6 - 0.055, left_x, y7 + 0.025)
+    draw_arrow(ax, cx, y6 - 0.055, mid_x, y7 + 0.025)
     draw_arrow(ax, cx, y6 - 0.055, right_x, y7 + 0.025)
 
     draw_text(ax, left_x, y7,
               'Any Narcolepsy Model',
               '196 cases (NT1 + NT2/IH)\n'
               '11,049 controls\n'
-              '155,613 visits')
+              '155,613 visits',
+              fontsize=8)
 
-    draw_text(ax, right_x, y7,
+    draw_text(ax, mid_x, y7,
               'NT1-Only Model',
               '66 NT1 cases\n'
               '11,049 controls\n'
-              '(NT2/IH excluded from cases & controls)')
+              'NT2/IH excluded',
+              fontsize=8)
+
+    draw_text(ax, right_x, y7,
+              'NT2/IH-Only Model',
+              '130 NT2/IH cases\n'
+              '11,049 controls\n'
+              'NT1 excluded',
+              fontsize=8)
 
     # --- Evaluation ---
     y8 = 0.04
     draw_arrow(ax, left_x, y7 - 0.055, left_x, y8 + 0.025)
+    draw_arrow(ax, mid_x, y7 - 0.055, mid_x, y8 + 0.025)
     draw_arrow(ax, right_x, y7 - 0.055, right_x, y8 + 0.025)
 
     draw_text(ax, left_x, y8,
               'Evaluation',
-              '5-fold CV: AUC 0.835, AUPRC 0.377\n'
-              'LOSO: AUC 0.797, AUPRC 0.428')
+              '5-fold CV: AUC 0.835\n'
+              'LOSO: AUC 0.797',
+              fontsize=8)
+
+    draw_text(ax, mid_x, y8,
+              'Evaluation',
+              '5-fold CV: AUC 0.838\n'
+              'LOSO: AUC 0.788',
+              fontsize=8)
 
     draw_text(ax, right_x, y8,
               'Evaluation',
-              '5-fold CV: AUC 0.838, AUPRC 0.298\n'
-              'LOSO: AUC 0.788, AUPRC 0.285')
+              '5-fold CV: AUC 0.773\n'
+              'LOSO: AUC 0.794',
+              fontsize=8)
 
     fig.tight_layout()
     os.makedirs('../manuscript/figures', exist_ok=True)
