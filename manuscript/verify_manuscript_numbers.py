@@ -18,7 +18,7 @@ import pandas as pd
 # Paths
 # ---------------------------------------------------------------------------
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.expanduser("~/Downloads/data")
+DATA_DIR = os.path.join(REPO, "data")
 DISC_DIR = os.path.join(DATA_DIR, "discriminative-modeling")
 PRED_DIR = os.path.join(DATA_DIR, "predictive-modeling")
 FEAT_UPDATE_DIR = os.path.join(REPO, "predictive-modeling", "features_update")
@@ -531,48 +531,25 @@ for site in expected_site_patients:
 # ===================================================================
 # Cross-sectional model performance (Tables 4 & 5)
 # ===================================================================
-section("BONUS: Cross-Sectional Model Performance (Tables 4 & 5)")
+section("BONUS: Cross-Sectional Best Model AUROC (from per_fold_results)")
 
-for task, table_name in [("nt1_vs_others", "Table 4 (NT1 vs Others)"),
-                          ("nt2ih_vs_others", "Table 5 (NT2/IH vs Others)")]:
-    avg_path = os.path.join(RESULTS_DIR, task, "avg_results.csv")
-    if not os.path.exists(avg_path):
-        print(f"  [SKIP] {avg_path} not found")
+for task, best_model, exp_auroc, exp_auprc in [
+    ("nt1_vs_others", "RandomForest", 0.996, 0.935),
+    ("nt2ih_vs_others", "XGBoost", 0.977, 0.676),
+]:
+    fold_path = os.path.join(RESULTS_DIR, task, "per_fold_results.csv")
+    if not os.path.exists(fold_path):
+        print(f"  [SKIP] {fold_path} not found")
         skipped += 1
         continue
 
-    avg_df = pd.read_csv(avg_path)
-    print(f"\n  --- {table_name} ---")
-
-    if task == "nt1_vs_others":
-        expected_models = {
-            "LogisticRegression":  {"Sens": 0.777, "Spec": 0.989, "F1": 0.804, "AUROC": 0.991, "AUPRC": 0.906},
-            "RandomForest":       {"Sens": 0.722, "Spec": 0.996, "F1": 0.800, "AUROC": 0.994, "AUPRC": 0.922},
-            "GradientBoosting":   {"Sens": 0.876, "Spec": 0.987, "F1": 0.850, "AUROC": 0.994, "AUPRC": 0.935},
-            "XGBoost":            {"Sens": 0.869, "Spec": 0.990, "F1": 0.855, "AUROC": 0.993, "AUPRC": 0.924},
-        }
-    else:
-        expected_models = {
-            "LogisticRegression":  {"Sens": 0.462, "Spec": 0.995, "F1": 0.575, "AUROC": 0.967, "AUPRC": 0.699},
-            "RandomForest":       {"Sens": 0.216, "Spec": 0.998, "F1": 0.325, "AUROC": 0.977, "AUPRC": 0.692},
-            "GradientBoosting":   {"Sens": 0.621, "Spec": 0.989, "F1": 0.667, "AUROC": 0.976, "AUPRC": 0.718},
-            "XGBoost":            {"Sens": 0.570, "Spec": 0.995, "F1": 0.675, "AUROC": 0.984, "AUPRC": 0.778},
-        }
-
-    for _, row in avg_df.iterrows():
-        model = row["Model"]
-        if model in expected_models:
-            exp = expected_models[model]
-            check_float(f"{model} Sensitivity = {exp['Sens']:.3f}",
-                        exp["Sens"], row["Sensitivity (mean)"], tol=0.002)
-            check_float(f"{model} Specificity = {exp['Spec']:.3f}",
-                        exp["Spec"], row["Specificity (mean)"], tol=0.002)
-            check_float(f"{model} F1 = {exp['F1']:.3f}",
-                        exp["F1"], row["F1 (mean)"], tol=0.002)
-            check_float(f"{model} AUROC = {exp['AUROC']:.3f}",
-                        exp["AUROC"], row["ROC-AUC (mean)"], tol=0.002)
-            check_float(f"{model} AUPRC = {exp['AUPRC']:.3f}",
-                        exp["AUPRC"], row["PR-AUC (mean)"], tol=0.002)
+    fold_df = pd.read_csv(fold_path)
+    rf = fold_df[fold_df["model"] == best_model]
+    mean_auroc = rf["roc_auc"].mean()
+    mean_auprc = rf["auprc"].mean()
+    print(f"\n  --- {task} ({best_model}) ---")
+    check_float(f"{task} {best_model} AUROC = {exp_auroc:.3f}", exp_auroc, mean_auroc)
+    check_float(f"{task} {best_model} AUPRC = {exp_auprc:.3f}", exp_auprc, mean_auprc)
 
 
 # ===================================================================

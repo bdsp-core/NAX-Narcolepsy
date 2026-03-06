@@ -629,20 +629,20 @@ def define_models_config():
         'LogisticRegression': (
             LogisticRegression,
             {
-                'C': [0.01, 0.1, 1.0, 10.0],
-                'l1_ratio': [0.0, 0.25, 0.5, 0.75, 1.0],
+                'C': [0.01, 0.1, 1.0],
+                'l1_ratio': [0.0, 0.5, 1.0],
                 'solver': ['saga'],
                 'class_weight': [None, 'balanced'],
                 'random_state': [42],
-                'max_iter': [5000]
+                'max_iter': [1000]
             }
         ),
         'RandomForest': (
             RandomForestClassifier,
             {
-                'n_estimators': [100, 200, 300],
-                'max_depth': [None, 10, 20, 30],
-                'min_samples_split': [2, 5, 10],
+                'n_estimators': [100, 300],
+                'max_depth': [None, 20],
+                'min_samples_split': [2, 5],
                 'class_weight': [None, 'balanced'],
                 'random_state': [42]
             }
@@ -651,9 +651,9 @@ def define_models_config():
             GradientBoostingClassifier,
             {
                 'n_estimators': [100, 200],
-                'learning_rate': [0.01, 0.1, 0.2],
-                'max_depth': [3, 5, 7],
-                'subsample': [0.8, 1.0],
+                'learning_rate': [0.1],
+                'max_depth': [5, 7],
+                'subsample': [0.8],
                 'random_state': [42]
             }
         ),
@@ -661,8 +661,8 @@ def define_models_config():
             XGBClassifier,
             {
                 'n_estimators': [100, 200],
-                'learning_rate': [0.01, 0.1, 0.2],
-                'max_depth': [3, 5, 7],
+                'learning_rate': [0.1],
+                'max_depth': [5, 7],
                 'subsample': [0.8, 1.0],
                 'colsample_bytree': [0.8, 1.0],
                 'random_state': [42]
@@ -1025,11 +1025,11 @@ def leave_one_source_out_validation(df, source_col, target_col, models_config, s
                 n_jobs=-1,
                 verbose=1
             )
-            
+
             grid_search.fit(X_train, y_train)
             best_model = grid_search.best_estimator_
             best_params = grid_search.best_params_
-            
+
             print(f"Best parameters for {model_name} excluding {held_out_source}: {best_params}")
             
             # Save individual fold model if requested
