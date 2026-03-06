@@ -2,7 +2,7 @@
 Narcolepsy risk score model — version 2
 
 Key changes from v1:
-1. Two outcomes: 'any_narcolepsy' (NT1 + NT2/IH combined) and 'nt1'
+1. Three outcomes: 'any_narcolepsy' (NT1 + NT2/IH combined), 'nt1', and 'nt2ih'
 2. Case visits truncated to ≤2 years before diagnosis
 3. Primary: pooled stratified 5-fold CV
 4. Secondary: leave-one-site-out (LOSO) CV as sensitivity analysis
@@ -11,6 +11,8 @@ Key changes from v1:
 Usage:
     python risk_score_v2.py any_narcolepsy
     python risk_score_v2.py nt1
+    python risk_score_v2.py nt2ih
+    python risk_score_v2.py all
 """
 
 import os, sys, pickle
@@ -180,7 +182,7 @@ def prepare_dataset(df, pat_info, outcome, horizon_years=0.5, max_years=None):
     For controls:
       - Keep all visits
 
-    outcome: 'any_narcolepsy' (NT1 + NT2/IH) or 'nt1' (NT1 only)
+    outcome: 'any_narcolepsy' (NT1 + NT2/IH), 'nt1' (NT1 only), or 'nt2ih' (NT2/IH only)
     max_years: how far back from diagnosis to include (default: MAX_YEARS_BEFORE_DIAG_TRAIN)
     """
     if max_years is None:
@@ -190,6 +192,8 @@ def prepare_dataset(df, pat_info, outcome, horizon_years=0.5, max_years=None):
         case_types = {'nt1', 'nt2ih'}
     elif outcome == 'nt1':
         case_types = {'nt1'}
+    elif outcome == 'nt2ih':
+        case_types = {'nt2ih'}
     else:
         raise ValueError(f"Unknown outcome: {outcome}")
 
@@ -199,10 +203,13 @@ def prepare_dataset(df, pat_info, outcome, horizon_years=0.5, max_years=None):
     ctrl_pids = {sid for sid, info in pat_info.items()
                  if info['case_type'] == 'control'}
 
-    # For NT1 outcome, exclude NT2/IH patients entirely (they're neither case nor control)
+    # For single-subtype outcomes, exclude the other subtype entirely
     if outcome == 'nt1':
         exclude_pids = {sid for sid, info in pat_info.items()
                         if info['case_type'] == 'nt2ih'}
+    elif outcome == 'nt2ih':
+        exclude_pids = {sid for sid, info in pat_info.items()
+                        if info['case_type'] == 'nt1'}
     else:
         exclude_pids = set()
 
@@ -704,20 +711,27 @@ def _sliding_window_auc(case_df, ctrl_df, window=1.0, step=0.1,
 
 def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
     """
-    Combined trajectory plot: 2x2 grid.
+    Combined trajectory plot: 2×N grid (N = number of outcomes).
     Top row: risk score trajectories (logit scale) with P25/P50/P75 curves.
     Bottom row: time-dependent AUROC.
-    Columns: any_narcolepsy, NT1.
     """
-    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL_IN, 6.0), sharex=True,
+    outcomes = sorted(all_results.keys(),
+                      key=lambda x: ['any_narcolepsy', 'nt1', 'nt2ih'].index(x))
+    n_cols = len(outcomes)
+    fig, axes = plt.subplots(2, n_cols, figsize=(DOUBLE_COL_IN * n_cols / 2, 6.0),
+                             sharex=True,
                              gridspec_kw={'height_ratios': [2.5, 1]})
+    if n_cols == 1:
+        axes = axes.reshape(2, 1)
     rng = np.random.RandomState(123)
     h = 0.5
 
-    outcome_labels = {'any_narcolepsy': 'Any narcolepsy', 'nt1': 'NT1 only'}
-    panel_labels = [['A', 'B'], ['C', 'D']]
+    outcome_labels = {'any_narcolepsy': 'Any narcolepsy', 'nt1': 'NT1 only',
+                      'nt2ih': 'NT2/IH only'}
+    all_panel = [chr(ord('A') + i) for i in range(2 * n_cols)]
+    panel_labels = [all_panel[:n_cols], all_panel[n_cols:]]
 
-    for col_i, outcome in enumerate(['any_narcolepsy', 'nt1']):
+    for col_i, outcome in enumerate(outcomes):
         ax_traj = axes[0, col_i]
         ax_auc = axes[1, col_i]
         add_panel_label(ax_traj, panel_labels[0][col_i])
@@ -826,13 +840,19 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
 
 
 def plot_score_distributions_combined(all_results, cv_type='pooled'):
-    """Combined score distribution plot: 2x1 (any_narcolepsy, NT1), h=0.5 only.
+    """Combined score distribution plot, h=0.5 only.
     Uses final model scores (traj_ data) so cohort matches trajectory plot."""
-    fig, axes = plt.subplots(2, 1, figsize=(DOUBLE_COL_IN, 6))
+    outcomes = sorted(all_results.keys(),
+                      key=lambda x: ['any_narcolepsy', 'nt1', 'nt2ih'].index(x))
+    n_rows = len(outcomes)
+    fig, axes = plt.subplots(n_rows, 1, figsize=(DOUBLE_COL_IN, 3 * n_rows))
+    if n_rows == 1:
+        axes = [axes]
     h = 0.5
-    outcome_labels = {'any_narcolepsy': 'Any narcolepsy (NT1 + NT2/IH)', 'nt1': 'NT1 only'}
+    outcome_labels = {'any_narcolepsy': 'Any narcolepsy (NT1 + NT2/IH)',
+                      'nt1': 'NT1 only', 'nt2ih': 'NT2/IH only'}
 
-    for row_i, outcome in enumerate(['any_narcolepsy', 'nt1']):
+    for row_i, outcome in enumerate(outcomes):
         ax = axes[row_i]
         add_panel_label(ax, chr(ord('A') + row_i))
         r = all_results[outcome][h][cv_type]
@@ -856,19 +876,25 @@ def plot_score_distributions_combined(all_results, cv_type='pooled'):
         ax.legend(fontsize=FONT_SIZE_LEGEND)
 
     plt.tight_layout()
-    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure8_risk_score_distributions.png'))
+    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure10_risk_score_distributions.png'))
     plt.close()
-    print("Saved: efigure8_risk_score_distributions.png")
+    print("Saved: efigure10_risk_score_distributions.png")
 
 
 def plot_feature_importance_combined(all_results, cv_type='pooled'):
-    """Combined feature importance: 2x1 (any_narcolepsy, NT1), h=0.5 only."""
-    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COL_IN * 2, 6))
+    """Combined feature importance, h=0.5 only."""
+    outcomes = sorted(all_results.keys(),
+                      key=lambda x: ['any_narcolepsy', 'nt1', 'nt2ih'].index(x))
+    n_cols = len(outcomes)
+    fig, axes = plt.subplots(1, n_cols, figsize=(DOUBLE_COL_IN * n_cols / 2 * 2, 6))
+    if n_cols == 1:
+        axes = [axes]
     h = 0.5
     top_n = 20
-    outcome_labels = {'any_narcolepsy': 'Any narcolepsy (NT1 + NT2/IH)', 'nt1': 'NT1 only'}
+    outcome_labels = {'any_narcolepsy': 'Any narcolepsy (NT1 + NT2/IH)',
+                      'nt1': 'NT1 only', 'nt2ih': 'NT2/IH only'}
 
-    for col_i, outcome in enumerate(['any_narcolepsy', 'nt1']):
+    for col_i, outcome in enumerate(outcomes):
         ax = axes[col_i]
         add_panel_label(ax, chr(ord('A') + col_i))
         r = all_results[outcome][h][cv_type]
@@ -897,23 +923,30 @@ def plot_feature_importance_combined(all_results, cv_type='pooled'):
         ax.set_xlabel('Mean coefficient (across CV folds)')
 
     plt.tight_layout()
-    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure9_top_predictive_features.png'))
+    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure11_top_predictive_features.png'))
     plt.close()
-    print("Saved: efigure9_top_predictive_features.png")
+    print("Saved: efigure11_top_predictive_features.png")
 
 
 def plot_performance_combined(all_results):
-    """Combined performance figure: 2x2 grid.
-    Rows: Any Narcolepsy, NT1.  Cols: AUC, AUPRC.
+    """Combined performance figure: Nx2 grid.
+    Rows: outcomes.  Cols: AUC, AUPRC.
     Each panel: 3 bars (Pooled CV, LOSO, Final model) with per-fold/site dots.
     """
-    fig, axes = plt.subplots(2, 2, figsize=(DOUBLE_COL_IN, 6))
+    outcomes = sorted(all_results.keys(),
+                      key=lambda x: ['any_narcolepsy', 'nt1', 'nt2ih'].index(x))
+    n_rows = len(outcomes)
+    fig, axes = plt.subplots(n_rows, 2, figsize=(DOUBLE_COL_IN, 3 * n_rows))
+    if n_rows == 1:
+        axes = axes.reshape(1, 2)
     h = 0.5
-    outcome_labels = {'any_narcolepsy': 'Any narcolepsy (NT1 + NT2/IH)', 'nt1': 'NT1 only'}
+    outcome_labels = {'any_narcolepsy': 'Any narcolepsy (NT1 + NT2/IH)',
+                      'nt1': 'NT1 only', 'nt2ih': 'NT2/IH only'}
     bar_labels = ['5-fold CV', 'LOSO', 'Final model\n(all data)']
-    panel_labels = [['A', 'B'], ['C', 'D']]
+    all_panel = [chr(ord('A') + i) for i in range(2 * n_rows)]
+    panel_labels = [[all_panel[r * 2], all_panel[r * 2 + 1]] for r in range(n_rows)]
 
-    for row_i, outcome in enumerate(['any_narcolepsy', 'nt1']):
+    for row_i, outcome in enumerate(outcomes):
         results = all_results[outcome]
         for col_i, metric in enumerate(['AUC', 'AUPRC']):
             ax = axes[row_i, col_i]
@@ -948,18 +981,20 @@ def plot_performance_combined(all_results):
             ax.set_title(f'{outcome_labels[outcome]} — {metric}')
 
     plt.tight_layout()
-    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure7_predictive_performance.png'))
+    pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure9_predictive_performance.png'))
     plt.close()
-    print("Saved: efigure7_predictive_performance.png")
+    print("Saved: efigure9_predictive_performance.png")
 
 
 def save_loso_table(all_results):
-    """Save a LOSO performance table broken down by site for both outcomes."""
+    """Save a LOSO performance table broken down by site for all outcomes."""
     h = 0.5
     outcome_labels = {'any_narcolepsy': 'Any Narcolepsy (NT1 + NT2/IH)',
-                      'nt1': 'NT1 Only'}
+                      'nt1': 'NT1 Only', 'nt2ih': 'NT2/IH Only'}
+    outcomes = sorted(all_results.keys(),
+                      key=lambda x: ['any_narcolepsy', 'nt1', 'nt2ih'].index(x))
     rows = []
-    for outcome in ['any_narcolepsy', 'nt1']:
+    for outcome in outcomes:
         results = all_results[outcome]
         perf = results[h]['loso']['perf']
         for _, row in perf.iterrows():
@@ -1001,12 +1036,17 @@ def plot_nnt_analysis(all_results, prevalence=0.0008, cv_type='pooled'):
 
     Uses final-model patient-level mean scores (traj_ data).
     """
-    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COL_IN, 3.5))
+    outcomes = sorted(all_results.keys(),
+                      key=lambda x: ['any_narcolepsy', 'nt1', 'nt2ih'].index(x))
+    n_cols = len(outcomes)
+    fig, axes = plt.subplots(1, n_cols, figsize=(DOUBLE_COL_IN * n_cols / 2, 3.5))
+    if n_cols == 1:
+        axes = [axes]
     h = 0.5
     outcome_labels = {'any_narcolepsy': 'Any narcolepsy (NT1 + NT2/IH)',
-                      'nt1': 'NT1 only'}
+                      'nt1': 'NT1 only', 'nt2ih': 'NT2/IH only'}
 
-    for col_i, outcome in enumerate(['any_narcolepsy', 'nt1']):
+    for col_i, outcome in enumerate(outcomes):
         results = all_results[outcome]
         r = results[h][cv_type]
 
@@ -1121,7 +1161,12 @@ def plot_nnt_analysis(all_results, prevalence=0.0008, cv_type='pooled'):
 
 def run_one_outcome(df_all, feat_names, pat_info, outcome):
     """Run training, evaluation, and per-outcome plots for one outcome."""
-    outcome_label = 'Any Narcolepsy (NT1 + NT2/IH)' if outcome == 'any_narcolepsy' else 'NT1'
+    _outcome_labels = {
+        'any_narcolepsy': 'Any Narcolepsy (NT1 + NT2/IH)',
+        'nt1': 'NT1',
+        'nt2ih': 'NT2/IH',
+    }
+    outcome_label = _outcome_labels[outcome]
     h = 0.5
     results = {}
 
@@ -1222,17 +1267,20 @@ def run_one_outcome(df_all, feat_names, pat_info, outcome):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python risk_score_v2.py <any_narcolepsy|nt1|both>")
+        print("Usage: python risk_score_v2.py <any_narcolepsy|nt1|nt2ih|both|all>")
         sys.exit(1)
 
     outcome = sys.argv[1].strip().lower()
-    assert outcome in ['any_narcolepsy', 'nt1', 'both'], \
-        f"outcome must be 'any_narcolepsy', 'nt1', or 'both', got '{outcome}'"
+    valid = ['any_narcolepsy', 'nt1', 'nt2ih', 'both', 'all']
+    assert outcome in valid, \
+        f"outcome must be one of {valid}, got '{outcome}'"
 
     # Load all data once
     df_all, feat_names, pat_info = load_all_data()
 
-    if outcome == 'both':
+    if outcome == 'all':
+        outcomes = ['any_narcolepsy', 'nt1', 'nt2ih']
+    elif outcome == 'both':
         outcomes = ['any_narcolepsy', 'nt1']
     else:
         outcomes = [outcome]
@@ -1241,8 +1289,8 @@ def main():
     for oc in outcomes:
         all_results[oc] = run_one_outcome(df_all, feat_names, pat_info, oc)
 
-    # Combined plots (requires both outcomes)
-    if len(all_results) == 2:
+    # Combined plots (requires all 3 outcomes)
+    if len(all_results) >= 2:
         print("\nGenerating combined plots...")
         plot_performance_combined(all_results)
         plot_score_distributions_combined(all_results, cv_type='pooled')

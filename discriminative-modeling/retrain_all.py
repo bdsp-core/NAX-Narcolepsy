@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Retrain all cross-sectional LOSO models for both tasks.
+Retrain all cross-sectional LOSO models for all three tasks.
 
 Includes chi-squared feature pre-selection (top 200) to speed up
 grid search. Feature selection is done per-task on the full dataset
@@ -39,6 +39,7 @@ models_config = define_models_config()
 tasks = {
     'nt1_vs_others': {1: 1, 2: 0, 3: None, 4: 0},
     'nt2ih_vs_others': {1: 0, 2: 1, 3: None, 4: 0},
+    'any_narcolepsy_vs_others': {1: 1, 2: 1, 3: None, 4: 0},
 }
 
 for task_name, label_map in tasks.items():

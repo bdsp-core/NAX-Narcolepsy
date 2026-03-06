@@ -201,7 +201,8 @@ check("After gap excl: controls = 11,049", 11049, len(ctrls_after_gap))
 section("5. Predictive Model Performance")
 
 for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickle"),
-                               ("nt1", "v2_results_nt1.pickle")]:
+                               ("nt1", "v2_results_nt1.pickle"),
+                               ("nt2ih", "v2_results_nt2ih.pickle")]:
     pickle_path = os.path.join(RISK_DIR, pickle_name)
     if not os.path.exists(pickle_path):
         print(f"  [SKIP] {pickle_path} not found")
@@ -224,16 +225,19 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
     mean_auprc_loso = loso_perf["AUPRC"].mean()
 
     print(f"\n  --- {outcome} ---")
-    if outcome == "any_narcolepsy":
-        check_float(f"{outcome} 5-fold CV AUC = 0.835", 0.835, mean_auc_cv)
-        check_float(f"{outcome} 5-fold CV AUPRC = 0.377", 0.377, mean_auprc_cv)
-        check_float(f"{outcome} LOSO AUC = 0.797", 0.797, mean_auc_loso)
-        check_float(f"{outcome} LOSO AUPRC = 0.428", 0.428, mean_auprc_loso)
-    elif outcome == "nt1":
-        check_float(f"{outcome} 5-fold CV AUC = 0.838", 0.838, mean_auc_cv)
-        check_float(f"{outcome} 5-fold CV AUPRC = 0.298", 0.298, mean_auprc_cv)
-        check_float(f"{outcome} LOSO AUC = 0.788", 0.788, mean_auc_loso)
-        check_float(f"{outcome} LOSO AUPRC = 0.285", 0.285, mean_auprc_loso)
+    expected_perf = {
+        "any_narcolepsy": {"cv_auc": 0.835, "cv_auprc": 0.377,
+                           "loso_auc": 0.797, "loso_auprc": 0.428},
+        "nt1":            {"cv_auc": 0.838, "cv_auprc": 0.298,
+                           "loso_auc": 0.788, "loso_auprc": 0.285},
+        "nt2ih":          {"cv_auc": 0.773, "cv_auprc": 0.265,
+                           "loso_auc": 0.794, "loso_auprc": 0.271},
+    }
+    exp = expected_perf[outcome]
+    check_float(f"{outcome} 5-fold CV AUC = {exp['cv_auc']}", exp["cv_auc"], mean_auc_cv)
+    check_float(f"{outcome} 5-fold CV AUPRC = {exp['cv_auprc']}", exp["cv_auprc"], mean_auprc_cv)
+    check_float(f"{outcome} LOSO AUC = {exp['loso_auc']}", exp["loso_auc"], mean_auc_loso)
+    check_float(f"{outcome} LOSO AUPRC = {exp['loso_auprc']}", exp["loso_auprc"], mean_auprc_loso)
 
     # Print actual values for reference
     print(f"         Actual 5-fold CV AUC:   {mean_auc_cv:.3f}")
@@ -249,6 +253,7 @@ section("6. Non-Zero L1 Feature Counts")
 for outcome, pickle_name, expected_count in [
     ("any_narcolepsy", "v2_results_any_narcolepsy.pickle", 82),
     ("nt1", "v2_results_nt1.pickle", 84),
+    ("nt2ih", "v2_results_nt2ih.pickle", 60),
 ]:
     pickle_path = os.path.join(RISK_DIR, pickle_name)
     if not os.path.exists(pickle_path):
@@ -443,7 +448,8 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
 section("9. LOSO Per-Site Case Counts and Performance (Supp Table 1)")
 
 for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickle"),
-                               ("nt1", "v2_results_nt1.pickle")]:
+                               ("nt1", "v2_results_nt1.pickle"),
+                               ("nt2ih", "v2_results_nt2ih.pickle")]:
     pickle_path = os.path.join(RISK_DIR, pickle_name)
     if not os.path.exists(pickle_path):
         print(f"  [SKIP] {pickle_path} not found")
@@ -456,23 +462,31 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
     loso_perf = data["results"][0.5]["loso"]["perf"]
     print(f"\n  --- {outcome} ---")
 
-    # Expected values from Supplementary Table 1
-    if outcome == "any_narcolepsy":
-        expected_sites = {
+    # Expected values from Supplementary Table 2
+    all_expected_sites = {
+        "any_narcolepsy": {
             "bch":   {"N_diag": 29, "N_ctrl": 605,  "AUC": 0.797, "AUPRC": 0.454},
             "bidmc": {"N_diag": 48, "N_ctrl": 5133, "AUC": 0.779, "AUPRC": 0.376},
             "emory": {"N_diag": 33, "N_ctrl": 483,  "AUC": 0.894, "AUPRC": 0.691},
             "mgb":   {"N_diag": 54, "N_ctrl": 4182, "AUC": 0.773, "AUPRC": 0.157},
             "stan":  {"N_diag": 32, "N_ctrl": 646,  "AUC": 0.740, "AUPRC": 0.462},
-        }
-    else:  # nt1
-        expected_sites = {
+        },
+        "nt1": {
             "bch":   {"N_diag": 16, "N_ctrl": 605,  "AUC": 0.941, "AUPRC": 0.311},
             "bidmc": {"N_diag": 13, "N_ctrl": 5133, "AUC": 0.828, "AUPRC": 0.321},
             "emory": {"N_diag": 9,  "N_ctrl": 483,  "AUC": 0.764, "AUPRC": 0.618},
             "mgb":   {"N_diag": 21, "N_ctrl": 4182, "AUC": 0.628, "AUPRC": 0.133},
             "stan":  {"N_diag": 7,  "N_ctrl": 646,  "AUC": 0.779, "AUPRC": 0.040},
-        }
+        },
+        "nt2ih": {
+            "bch":   {"N_diag": 13, "N_ctrl": 605,  "AUC": 0.808, "AUPRC": 0.142},
+            "bidmc": {"N_diag": 35, "N_ctrl": 5133, "AUC": 0.790, "AUPRC": 0.301},
+            "emory": {"N_diag": 24, "N_ctrl": 483,  "AUC": 0.870, "AUPRC": 0.481},
+            "mgb":   {"N_diag": 33, "N_ctrl": 4182, "AUC": 0.677, "AUPRC": 0.192},
+            "stan":  {"N_diag": 25, "N_ctrl": 646,  "AUC": 0.822, "AUPRC": 0.238},
+        },
+    }
+    expected_sites = all_expected_sites[outcome]
 
     for _, row in loso_perf.iterrows():
         site = row["site"]
@@ -488,14 +502,16 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
                         exp["AUPRC"], row["AUPRC"], tol=0.002)
 
     # Mean LOSO
+    expected_means = {
+        "any_narcolepsy": {"auc": 0.797, "auprc": 0.428},
+        "nt1": {"auc": 0.788, "auprc": 0.285},
+        "nt2ih": {"auc": 0.794, "auprc": 0.271},
+    }
     mean_auc = loso_perf["AUC"].mean()
     mean_auprc = loso_perf["AUPRC"].mean()
-    if outcome == "any_narcolepsy":
-        check_float(f"{outcome} mean LOSO AUC = 0.797", 0.797, mean_auc)
-        check_float(f"{outcome} mean LOSO AUPRC = 0.428", 0.428, mean_auprc)
-    else:
-        check_float(f"{outcome} mean LOSO AUC = 0.788", 0.788, mean_auc)
-        check_float(f"{outcome} mean LOSO AUPRC = 0.285", 0.285, mean_auprc)
+    em = expected_means[outcome]
+    check_float(f"{outcome} mean LOSO AUC = {em['auc']}", em["auc"], mean_auc)
+    check_float(f"{outcome} mean LOSO AUPRC = {em['auprc']}", em["auprc"], mean_auprc)
 
 # ===================================================================
 # 10. Demographics (Table 1A) - from cross-sectional notes
@@ -536,6 +552,7 @@ section("BONUS: Cross-Sectional Best Model AUROC (from per_fold_results)")
 for task, best_model, exp_auroc, exp_auprc in [
     ("nt1_vs_others", "RandomForest", 0.996, 0.935),
     ("nt2ih_vs_others", "XGBoost", 0.977, 0.676),
+    ("any_narcolepsy_vs_others", "XGBoost", 0.992, 0.934),
 ]:
     fold_path = os.path.join(RESULTS_DIR, task, "per_fold_results.csv")
     if not os.path.exists(fold_path):
