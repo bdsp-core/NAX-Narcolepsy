@@ -45,6 +45,21 @@ def draw_line(ax, x1, y1, x2, y2, color='#555555', lw=0.8):
     ax.plot([x1, x2], [y1, y2], color=color, linewidth=lw, zorder=1)
 
 
+def draw_elbow_arrows(ax, x_from, y_from, x_targets, y_to, color='#555555', lw=0.8):
+    """Draw elbow (right-angle) arrows from one point to multiple targets.
+
+    Draws: vertical down to midpoint, horizontal out to each target x, then
+    vertical arrows down to y_to.
+    """
+    y_mid = (y_from + y_to) / 2 + 0.015
+    draw_line(ax, x_from, y_from, x_from, y_mid, color=color, lw=lw)
+    x_min = min(x_targets)
+    x_max = max(x_targets)
+    draw_line(ax, x_min, y_mid, x_max, y_mid, color=color, lw=lw)
+    for xt in x_targets:
+        draw_arrow(ax, xt, y_mid, xt, y_to, color=color, lw=lw)
+
+
 def draw_side_text(ax, x_main, y_from, x_side, y_side, text,
                    fontsize=7.5, color='#666666'):
     """Draw an exclusion side-branch: horizontal line, down arrow, text."""
@@ -126,9 +141,7 @@ def make_cross_sectional_consort():
     mid_x = 0.50
     right_x = 0.84
 
-    draw_arrow(ax, cx, y5 - 0.04, left_x, y6 + 0.025)
-    draw_arrow(ax, cx, y5 - 0.04, mid_x, y6 + 0.025)
-    draw_arrow(ax, cx, y5 - 0.04, right_x, y6 + 0.025)
+    draw_elbow_arrows(ax, cx, y5 - 0.04, [left_x, mid_x, right_x], y6 + 0.025)
 
     draw_text(ax, left_x, y6,
               'NT1 vs. Others',
@@ -256,9 +269,7 @@ def make_longitudinal_consort():
     left_x = 0.16
     mid_x = 0.50
     right_x = 0.84
-    draw_arrow(ax, cx, y6 - 0.055, left_x, y7 + 0.025)
-    draw_arrow(ax, cx, y6 - 0.055, mid_x, y7 + 0.025)
-    draw_arrow(ax, cx, y6 - 0.055, right_x, y7 + 0.025)
+    draw_elbow_arrows(ax, cx, y6 - 0.055, [left_x, mid_x, right_x], y7 + 0.025)
 
     draw_text(ax, left_x, y7,
               'Any Narcolepsy Model',
