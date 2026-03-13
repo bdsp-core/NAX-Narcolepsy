@@ -722,6 +722,42 @@ def _sliding_window_percentiles(t_rel, values, percentiles, window=1.0,
     return t_centers, result
 
 
+def _sliding_window_mean_ci(t_rel, values, sids, window=1.5, step=0.1,
+                             min_patients=8, n_boot=200):
+    """
+    Compute patient-level mean risk score with bootstrap 95% CI in sliding windows.
+    Within each window, first averages scores per patient, then computes the
+    mean across patients with bootstrap CI.
+    Returns: t_centers, mean_vals, ci_lo, ci_hi arrays.
+    """
+    t_centers = np.arange(t_rel.min() + window / 2,
+                          t_rel.max() + step, step)
+    mean_vals = np.full(len(t_centers), np.nan)
+    ci_lo = np.full(len(t_centers), np.nan)
+    ci_hi = np.full(len(t_centers), np.nan)
+    rng = np.random.RandomState(42)
+
+    for i, tc in enumerate(t_centers):
+        mask = (t_rel >= tc - window / 2) & (t_rel < tc + window / 2)
+        if mask.sum() == 0:
+            continue
+        # Patient-level means within window
+        df_win = pd.DataFrame({'sid': sids[mask], 'val': values[mask]})
+        pat_means = df_win.groupby('sid')['val'].mean().values
+        if len(pat_means) < min_patients:
+            continue
+        mean_vals[i] = np.mean(pat_means)
+        # Bootstrap CI
+        boot_means = np.array([
+            np.mean(rng.choice(pat_means, size=len(pat_means), replace=True))
+            for _ in range(n_boot)
+        ])
+        ci_lo[i] = np.percentile(boot_means, 2.5)
+        ci_hi[i] = np.percentile(boot_means, 97.5)
+
+    return t_centers, mean_vals, ci_lo, ci_hi
+
+
 def _sliding_window_auc(case_df, ctrl_df, window=1.0, step=0.1,
                         min_cases=5, min_ctrls=10):
     """
@@ -759,7 +795,7 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
     outcomes = sorted(all_results.keys(),
                       key=lambda x: ['any_narcolepsy', 'nt1', 'nt2ih'].index(x))
     n_cols = len(outcomes)
-    fig, axes = plt.subplots(2, n_cols, figsize=(DOUBLE_COL_IN * n_cols / 2, 6.0),
+    fig, axes = plt.subplots(2, n_cols, figsize=(DOUBLE_COL_IN * n_cols / 2 * 1.3, 6.5),
                              sharex=True,
                              gridspec_kw={'height_ratios': [2.5, 1]})
     if n_cols == 1:
@@ -767,8 +803,8 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
     rng = np.random.RandomState(123)
     h = 0.5
 
-    outcome_labels = {'any_narcolepsy': 'Any narcolepsy', 'nt1': 'NT1 only',
-                      'nt2ih': 'NT2/IH only'}
+    outcome_labels = {'any_narcolepsy': 'Any narcolepsy', 'nt1': 'NT1',
+                      'nt2ih': 'NT2/IH'}
     all_panel = [chr(ord('A') + i) for i in range(2 * n_cols)]
     panel_labels = [all_panel[:n_cols], all_panel[n_cols:]]
 
@@ -792,29 +828,22 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
             ctrl_df['logit_score'] = _logit(ctrl_df['score'].values)
 
         # === Top row: trajectories ===
+        # Individual patient curves (faint)
         if len(ctrl_df) > 0:
             for sid in ctrl_df['sid'].unique():
                 sub = ctrl_df[ctrl_df['sid'] == sid].sort_values('t_rel')
                 if len(sub) >= 2:
-                    ax_traj.plot(sub['t_rel'], sub['logit_score'], color=CTRL_COLOR,
-                                 alpha=0.12, linewidth=0.5)
-                elif len(sub) == 1:
-                    ax_traj.scatter(sub['t_rel'], sub['logit_score'], color=CTRL_COLOR,
-                                    alpha=0.10, s=8, zorder=1)
+                    ax_traj.plot(sub['t_rel'], sub['score'], color=CTRL_COLOR,
+                                 alpha=0.06, linewidth=0.4)
         if len(case_df) > 0:
             for sid in case_df['sid'].unique():
                 sub = case_df[case_df['sid'] == sid].sort_values('t_rel')
                 if len(sub) >= 2:
-                    ax_traj.plot(sub['t_rel'], sub['logit_score'], color=CASE_COLOR,
-                                 alpha=0.20, linewidth=0.6)
-                elif len(sub) == 1:
-                    ax_traj.scatter(sub['t_rel'], sub['logit_score'], color=CASE_COLOR,
-                                    alpha=0.15, s=10, zorder=2)
+                    ax_traj.plot(sub['t_rel'], sub['score'], color=CASE_COLOR,
+                                 alpha=0.12, linewidth=0.5)
 
-        # Percentile curves via sliding 1yr window
-        pcts = [0.25, 0.50, 0.75]
-        pct_styles = {0.25: ('--', 1.2), 0.50: ('-', LINE_WIDTH_THICK), 0.75: ('--', 1.2)}
-        p50_endpoints = {}  # store rightmost P50 point for inline labels
+        # Mean + 95% CI curves via sliding window (patient-level)
+        mean_endpoints = {}
         for df_group, color, group_label in [
             (ctrl_df, CTRL_COLOR, 'Controls'),
             (case_df, CASE_COLOR, 'Cases'),
@@ -822,30 +851,33 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
             if len(df_group) == 0:
                 continue
             t_arr = df_group['t_rel'].values
-            v_arr = df_group['logit_score'].values
-            t_ctr, pct_dict = _sliding_window_percentiles(
-                t_arr, v_arr, pcts, window=1.0, step=0.1, min_count=10)
-            for p in pcts:
-                ls, lw = pct_styles[p]
-                valid = ~np.isnan(pct_dict[p])
-                ax_traj.plot(t_ctr[valid], pct_dict[p][valid], color=color,
-                             linestyle=ls, linewidth=lw, zorder=10)
-                if p == 0.50 and valid.any():
-                    # Store endpoint for inline label
-                    idx = np.where(valid)[0][-1]
-                    p50_endpoints[group_label] = (t_ctr[idx], pct_dict[p][idx], color)
+            v_arr = df_group['score'].values
+            s_arr = df_group['sid'].values
+            t_ctr, mean_v, ci_lo, ci_hi = _sliding_window_mean_ci(
+                t_arr, v_arr, s_arr, window=1.5, step=0.1, min_patients=8)
+            valid = ~np.isnan(mean_v)
+            if valid.any():
+                ax_traj.plot(t_ctr[valid], mean_v[valid], color=color,
+                             linewidth=LINE_WIDTH_THICK, zorder=10)
+                ax_traj.fill_between(t_ctr[valid], ci_lo[valid], ci_hi[valid],
+                                     color=color, alpha=0.15, zorder=9)
+                idx = np.where(valid)[0][-1]
+                mean_endpoints[group_label] = (t_ctr[idx], mean_v[idx], color)
 
-        # Inline labels on P50 curves (Tufte style)
-        for grp, (t_end, y_end, clr) in p50_endpoints.items():
+        # Inline labels (Tufte style)
+        for grp, (t_end, y_end, clr) in mean_endpoints.items():
             n_grp = n_cases if grp == 'Cases' else n_ctrls
-            ax_traj.annotate(f'{grp} (n={n_grp})',
+            ax_traj.annotate(f'{grp}\n(n={n_grp})',
                              xy=(t_end, y_end), xytext=(6, 0),
                              textcoords='offset points',
                              fontsize=FONT_SIZE_ANNOTATION, color=clr,
-                             va='center', ha='left', fontweight='bold', zorder=15)
+                             va='center', ha='left', fontweight='bold', zorder=15,
+                             annotation_clip=False)
 
+        ax_traj.set_ylim(-0.02, 1.05)
+        ax_traj.axhline(0.5, color='gray', linewidth=0.6, linestyle=':', alpha=0.5)
         if col_i == 0:
-            ax_traj.set_ylabel('Risk score (logit scale)')
+            ax_traj.set_ylabel('Mean risk score')
 
         ax_traj.set_title(f'{outcome_labels[outcome]}')
 
@@ -870,10 +902,11 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
 
     # Shared x-axis settings
     for ax in axes.flat:
-        ax.set_xlim(-2.65, 0.15)
-        ax.set_xticks(np.arange(-2.5, 0.1, 0.5))
+        ax.set_xlim(-5.15, 0.15)
+        ax.set_xticks(np.arange(-5, 0.1, 1.0))
 
     plt.tight_layout()
+    plt.subplots_adjust(right=0.88)  # room for inline labels
     os.makedirs(MANUSCRIPT_FIG_DIR, exist_ok=True)
     pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'figure2_risk_score_trajectories.png'))
     plt.close()

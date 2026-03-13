@@ -94,8 +94,8 @@ Computes a longitudinal risk score from clinical notes written **before** a narc
 
 | Outcome | 5-fold CV AUC | LOSO AUC | Training Cases |
 |---------|---------------|----------|----------------|
-| Any Narcolepsy (NT1 + NT2/IH) | 0.835 | 0.797 | 196 |
-| NT1 Only | 0.838 | 0.788 | 66 |
+| Any Narcolepsy (NT1 + NT2/IH) | 0.802 | 0.816 | 191 |
+| NT1 Only | 0.815 | 0.822 | 72 |
 
 ### Running
 
@@ -109,7 +109,7 @@ This trains both outcome models (any_narcolepsy, NT1), runs all cross-validation
 - `v2_performance_combined.png` -- CV / LOSO / resubstitution AUC and AUPRC
 - `v2_distributions_combined.png` -- Risk score distributions for cases vs. controls
 - `v2_features_combined.png` -- Top predictive features by coefficient magnitude
-- `v2_trajectories_combined.png` -- Risk score trajectories aligned to diagnosis (logit scale)
+- `v2_trajectories_combined.png` -- Risk score trajectories aligned to diagnosis (mean + 95% CI, 5-year window)
 - `v2_nnt_analysis.png` -- Number Needed to Test analysis (assumed prevalence 0.08%)
 - `v2_loso_by_site.csv` -- LOSO performance broken down by site
 
