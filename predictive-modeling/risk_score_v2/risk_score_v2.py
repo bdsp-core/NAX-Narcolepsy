@@ -642,7 +642,12 @@ def score_full_timeline(df_full, feat_names, fold_map, artifacts_all):
 # ---------------------------------------------------------------------------
 
 def _build_traj_data(results, h, pat_info, cv_type='pooled', rng=None):
-    """Build case and control trajectory DataFrames for one outcome/horizon."""
+    """Build case and control trajectory DataFrames for one outcome/horizon.
+
+    T is years since first visit (raw chronological time). For cases, we
+    subtract diag_t to get diagnosis-relative time. For controls, we assign
+    a random pseudo-diagnosis time and compute relative time from that.
+    """
     r = results[h][cv_type]
     sids_arr = r.get('traj_sids', r['sids'])
     scores = r.get('traj_scores', r['scores'])
@@ -673,10 +678,7 @@ def _build_traj_data(results, h, pat_info, cv_type='pooled', rng=None):
 
     # Controls: random pseudo-diagnosis, keep visits in [-5yr, 0]
     ctrl_rows = []
-    ctrl_sample = list(ctrl_sids)
-    if len(ctrl_sample) > 500:
-        ctrl_sample = list(rng.choice(ctrl_sample, size=500, replace=False))
-    for sid in ctrl_sample:
+    for sid in ctrl_sids:
         sub = dtmp[dtmp['sid'] == sid].sort_values('T')
         t_vals = sub['T'].values
         t_span = t_vals[-1] - t_vals[0]
@@ -827,22 +829,7 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
             ctrl_df = ctrl_df.copy()
             ctrl_df['logit_score'] = _logit(ctrl_df['score'].values)
 
-        # === Top row: trajectories ===
-        # Individual patient curves (faint)
-        if len(ctrl_df) > 0:
-            for sid in ctrl_df['sid'].unique():
-                sub = ctrl_df[ctrl_df['sid'] == sid].sort_values('t_rel')
-                if len(sub) >= 2:
-                    ax_traj.plot(sub['t_rel'], sub['score'], color=CTRL_COLOR,
-                                 alpha=0.06, linewidth=0.4)
-        if len(case_df) > 0:
-            for sid in case_df['sid'].unique():
-                sub = case_df[case_df['sid'] == sid].sort_values('t_rel')
-                if len(sub) >= 2:
-                    ax_traj.plot(sub['t_rel'], sub['score'], color=CASE_COLOR,
-                                 alpha=0.12, linewidth=0.5)
-
-        # Mean + 95% CI curves via sliding window (patient-level)
+        # === Top row: trajectories (mean + 95% CI only) ===
         mean_endpoints = {}
         for df_group, color, group_label in [
             (ctrl_df, CTRL_COLOR, 'Controls'),
@@ -875,7 +862,8 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
                              annotation_clip=False)
 
         ax_traj.set_ylim(-0.02, 1.05)
-        ax_traj.axhline(0.5, color='gray', linewidth=0.6, linestyle=':', alpha=0.5)
+        for yval in [0.2, 0.4, 0.6, 0.8]:
+            ax_traj.axhline(yval, color='gray', linewidth=0.4, linestyle='-', alpha=0.25)
         if col_i == 0:
             ax_traj.set_ylabel('Mean risk score')
 
@@ -1313,6 +1301,7 @@ def run_one_outcome(df_all, feat_names, pat_info, outcome):
         'results': results,
         'final_model': final_artifacts,
         'feat_names': feat_names,
+        'pat_info': pat_info,
     }
     with open(f'v2_results_{outcome}.pickle', 'wb') as f:
         pickle.dump(save_data, f)
