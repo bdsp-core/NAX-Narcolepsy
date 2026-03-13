@@ -214,20 +214,20 @@ def make_longitudinal_consort():
     draw_arrow(ax, cx, y1 - 0.04, cx, y2 + 0.025)
     draw_text(ax, cx, y2,
               'Longitudinal Visit Extraction',
-              '13,720 patients  |  2,453,753 visits\n'
-              '543 cases (266 NT1, 277 NT2/IH)  |  13,177 controls')
+              '10,403 patients  |  1,308,867 visits\n'
+              '543 cases (266 NT1, 277 NT2/IH)  |  9,860 controls')
 
     # --- Row 3: Gap Exclusion ---
     y3 = 0.70
     draw_arrow(ax, cx, y2 - 0.045, cx, y3 + 0.025)
     draw_text(ax, cx, y3,
               'After Gap Exclusion (>5 yr between visits)',
-              '11,921 patients  |  2,084,765 visits\n'
-              '488 cases (241 NT1, 247 NT2/IH)  |  11,433 controls')
+              '8,968 patients  |  1,099,123 visits\n'
+              '488 cases (241 NT1, 247 NT2/IH)  |  8,480 controls')
 
     draw_side_text(ax, cx + 0.22, y3 - 0.005, excl_x, y3 - 0.04,
-                   'Excluded: 1,799 patients\n'
-                   '25 NT1, 30 NT2/IH, 1,744 controls',
+                   'Excluded: 1,435 patients\n'
+                   '25 NT1, 30 NT2/IH, 1,380 controls',
                    fontsize=7.5)
 
     # --- Row 4: Visit Subsampling ---
@@ -235,10 +235,10 @@ def make_longitudinal_consort():
     draw_arrow(ax, cx, y3 - 0.045, cx, y4 + 0.025)
     draw_text(ax, cx, y4,
               'After Visit Subsampling (max 20/patient)',
-              '11,921 patients  |  191,040 visits')
+              '8,968 patients  |  135,426 visits')
 
     draw_side_text(ax, cx + 0.22, y4 - 0.005, excl_x, y4 - 0.035,
-                   'Visits reduced: 2,084,765 → 191,040\n'
+                   'Visits reduced: 1,099,123 → 135,426\n'
                    'First and last visits preserved',
                    fontsize=7.5, color='#7B68AE')
 
@@ -247,7 +247,7 @@ def make_longitudinal_consort():
     draw_arrow(ax, cx, y4 - 0.045, cx, y5 + 0.025)
     draw_text(ax, cx, y5,
               'Sparse Feature Removal',
-              'Features with <50 non-zero values excluded (934 → 922 features)\n'
+              'Features with <50 non-zero values excluded (934 → 924 features)\n'
               'Chi-squared top 100 features selected per fold')
 
     # --- Row 6: Temporal Windowing ---
@@ -272,21 +272,21 @@ def make_longitudinal_consort():
 
     draw_text(ax, left_x, y7,
               'Any Narcolepsy Model',
-              '190 cases (NT1 + NT2/IH)\n'
-              '11,433 controls',
+              '191 cases (NT1 + NT2/IH)\n'
+              '8,480 controls',
               fontsize=8)
 
     draw_text(ax, mid_x, y7,
               'NT1-Only Model',
-              '71 NT1 cases\n'
-              '11,433 controls\n'
+              '72 NT1 cases\n'
+              '8,480 controls\n'
               'NT2/IH excluded',
               fontsize=8)
 
     draw_text(ax, right_x, y7,
               'NT2/IH-Only Model',
               '119 NT2/IH cases\n'
-              '11,433 controls\n'
+              '8,480 controls\n'
               'NT1 excluded',
               fontsize=8)
 
@@ -298,20 +298,20 @@ def make_longitudinal_consort():
 
     draw_text(ax, left_x, y8,
               'Evaluation',
-              '5-fold CV: AUC 0.849\n'
-              'LOSO: AUC 0.832',
+              '5-fold CV: AUC 0.802\n'
+              'LOSO: AUC 0.816',
               fontsize=8)
 
     draw_text(ax, mid_x, y8,
               'Evaluation',
-              '5-fold CV: AUC 0.841\n'
-              'LOSO: AUC 0.861',
+              '5-fold CV: AUC 0.815\n'
+              'LOSO: AUC 0.822',
               fontsize=8)
 
     draw_text(ax, right_x, y8,
               'Evaluation',
-              '5-fold CV: AUC 0.850\n'
-              'LOSO: AUC 0.795',
+              '5-fold CV: AUC 0.854\n'
+              'LOSO: AUC 0.763',
               fontsize=8)
 
     fig.tight_layout()

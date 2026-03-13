@@ -642,11 +642,18 @@ def score_full_timeline(df_full, feat_names, fold_map, artifacts_all):
 # ---------------------------------------------------------------------------
 
 def _build_traj_data(results, h, pat_info, cv_type='pooled', rng=None):
-    """Build case and control trajectory DataFrames for one outcome/horizon.
+    """Build case trajectory DataFrame and control summary for one outcome.
 
     T is years since first visit (raw chronological time). For cases, we
-    subtract diag_t to get diagnosis-relative time. For controls, we assign
-    a random pseudo-diagnosis time and compute relative time from that.
+    subtract diag_t to get diagnosis-relative time. For controls, time
+    alignment is meaningless (no diagnosis), so we compute a single
+    patient-level mean score per control and return summary statistics.
+
+    Returns: case_df, ctrl_summary dict with keys:
+        'n': number of control patients
+        'mean': mean of patient-level mean scores
+        'ci_lo', 'ci_hi': 95% bootstrap CI
+        'pat_scores': array of patient-level mean scores (for AUROC)
     """
     r = results[h][cv_type]
     sids_arr = r.get('traj_sids', r['sids'])
@@ -676,28 +683,29 @@ def _build_traj_data(results, h, pat_info, cv_type='pooled', rng=None):
     case_df = pd.DataFrame(case_rows) if case_rows else pd.DataFrame(
         columns=['t_rel', 'score', 'sid'])
 
-    # Controls: random pseudo-diagnosis, keep visits in [-5yr, 0]
-    ctrl_rows = []
-    for sid in ctrl_sids:
-        sub = dtmp[dtmp['sid'] == sid].sort_values('T')
-        t_vals = sub['T'].values
-        t_span = t_vals[-1] - t_vals[0]
-        if t_span < 0.5:
-            continue
-        earliest_pseudo = t_vals[0] + 0.5
-        latest_pseudo = t_vals[-1]
-        if earliest_pseudo >= latest_pseudo:
-            pseudo_diag = latest_pseudo
-        else:
-            pseudo_diag = rng.uniform(earliest_pseudo, latest_pseudo)
-        for _, row in sub.iterrows():
-            t_rel = row['T'] - pseudo_diag
-            if -MAX_YEARS_BEFORE_DIAG_TEST - 0.1 <= t_rel <= 0.1:
-                ctrl_rows.append({'t_rel': t_rel, 'score': row['score'], 'sid': sid})
-    ctrl_df = pd.DataFrame(ctrl_rows) if ctrl_rows else pd.DataFrame(
-        columns=['t_rel', 'score', 'sid'])
+    # Controls: no time alignment — compute patient-level mean scores
+    ctrl_scores = dtmp[dtmp['y'] == 0].groupby('sid')['score'].mean().values
+    n_ctrl = len(ctrl_scores)
+    ctrl_mean = np.mean(ctrl_scores) if n_ctrl > 0 else np.nan
+    rng_boot = np.random.RandomState(42)
+    n_boot = 200
+    if n_ctrl > 0:
+        boot_means = np.array([
+            np.mean(rng_boot.choice(ctrl_scores, size=n_ctrl, replace=True))
+            for _ in range(n_boot)
+        ])
+        ci_lo = np.percentile(boot_means, 2.5)
+        ci_hi = np.percentile(boot_means, 97.5)
+    else:
+        ci_lo, ci_hi = np.nan, np.nan
 
-    return case_df, ctrl_df
+    ctrl_summary = {
+        'n': n_ctrl, 'mean': ctrl_mean,
+        'ci_lo': ci_lo, 'ci_hi': ci_hi,
+        'pat_scores': ctrl_scores,
+    }
+
+    return case_df, ctrl_summary
 
 
 def _logit(p, eps=1e-3):
@@ -788,6 +796,34 @@ def _sliding_window_auc(case_df, ctrl_df, window=1.0, step=0.1,
     return t_centers, auc_vals
 
 
+def _sliding_window_auc_vs_flat_ctrl(case_df, ctrl_pat_scores, window=1.0,
+                                      step=0.1, min_cases=5):
+    """
+    Compute time-varying AUROC: case scores in each time window vs ALL
+    control patient-level mean scores (time-independent).
+    """
+    t_min = max(case_df['t_rel'].min(), -5.0)
+    t_max = min(case_df['t_rel'].max(), 0.1)
+    t_centers = np.arange(t_min + window / 2, t_max + step, step)
+    auc_vals = np.full(len(t_centers), np.nan)
+
+    for i, tc in enumerate(t_centers):
+        mask = ((case_df['t_rel'] >= tc - window / 2) &
+                (case_df['t_rel'] < tc + window / 2))
+        sub = case_df[mask]
+        if len(sub) == 0:
+            continue
+        case_pat = sub.groupby('sid')['score'].mean().values
+        if len(case_pat) < min_cases:
+            continue
+        all_scores = np.concatenate([case_pat, ctrl_pat_scores])
+        all_labels = np.concatenate([np.ones(len(case_pat)),
+                                     np.zeros(len(ctrl_pat_scores))])
+        auc_vals[i] = roc_auc_score(all_labels, all_scores)
+
+    return t_centers, auc_vals
+
+
 def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
     """
     Combined trajectory plot: 2×N grid (N = number of outcomes).
@@ -816,48 +852,44 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
         add_panel_label(ax_traj, panel_labels[0][col_i])
         add_panel_label(ax_auc, panel_labels[1][col_i])
         results = all_results[outcome]
-        case_df, ctrl_df = _build_traj_data(results, h, pat_info, cv_type, rng)
+        case_df, ctrl_summary = _build_traj_data(results, h, pat_info, cv_type, rng)
 
         n_cases = case_df['sid'].nunique() if len(case_df) > 0 else 0
-        n_ctrls = ctrl_df['sid'].nunique() if len(ctrl_df) > 0 else 0
+        n_ctrls = ctrl_summary['n']
 
-        # Apply logit transform
+        # === Top row: trajectories ===
+        # Cases: sliding-window mean + 95% CI
         if len(case_df) > 0:
-            case_df = case_df.copy()
-            case_df['logit_score'] = _logit(case_df['score'].values)
-        if len(ctrl_df) > 0:
-            ctrl_df = ctrl_df.copy()
-            ctrl_df['logit_score'] = _logit(ctrl_df['score'].values)
-
-        # === Top row: trajectories (mean + 95% CI only) ===
-        mean_endpoints = {}
-        for df_group, color, group_label in [
-            (ctrl_df, CTRL_COLOR, 'Controls'),
-            (case_df, CASE_COLOR, 'Cases'),
-        ]:
-            if len(df_group) == 0:
-                continue
-            t_arr = df_group['t_rel'].values
-            v_arr = df_group['score'].values
-            s_arr = df_group['sid'].values
+            t_arr = case_df['t_rel'].values
+            v_arr = case_df['score'].values
+            s_arr = case_df['sid'].values
             t_ctr, mean_v, ci_lo, ci_hi = _sliding_window_mean_ci(
                 t_arr, v_arr, s_arr, window=1.5, step=0.1, min_patients=8)
             valid = ~np.isnan(mean_v)
             if valid.any():
-                ax_traj.plot(t_ctr[valid], mean_v[valid], color=color,
+                ax_traj.plot(t_ctr[valid], mean_v[valid], color=CASE_COLOR,
                              linewidth=LINE_WIDTH_THICK, zorder=10)
                 ax_traj.fill_between(t_ctr[valid], ci_lo[valid], ci_hi[valid],
-                                     color=color, alpha=0.15, zorder=9)
+                                     color=CASE_COLOR, alpha=0.15, zorder=9)
                 idx = np.where(valid)[0][-1]
-                mean_endpoints[group_label] = (t_ctr[idx], mean_v[idx], color)
+                ax_traj.annotate(f'Cases\n(n={n_cases})',
+                                 xy=(t_ctr[idx], mean_v[idx]), xytext=(6, 0),
+                                 textcoords='offset points',
+                                 fontsize=FONT_SIZE_ANNOTATION, color=CASE_COLOR,
+                                 va='center', ha='left', fontweight='bold', zorder=15,
+                                 annotation_clip=False)
 
-        # Inline labels (Tufte style)
-        for grp, (t_end, y_end, clr) in mean_endpoints.items():
-            n_grp = n_cases if grp == 'Cases' else n_ctrls
-            ax_traj.annotate(f'{grp}\n(n={n_grp})',
-                             xy=(t_end, y_end), xytext=(6, 0),
+        # Controls: flat line (time alignment is meaningless for non-diagnosed)
+        if n_ctrls > 0:
+            xlim = (-5.15, 0.15)
+            ax_traj.axhline(ctrl_summary['mean'], color=CTRL_COLOR,
+                            linewidth=LINE_WIDTH_THICK, zorder=10)
+            ax_traj.axhspan(ctrl_summary['ci_lo'], ctrl_summary['ci_hi'],
+                            color=CTRL_COLOR, alpha=0.15, zorder=9)
+            ax_traj.annotate(f'Controls\n(n={n_ctrls})',
+                             xy=(0.05, ctrl_summary['mean']), xytext=(6, 0),
                              textcoords='offset points',
-                             fontsize=FONT_SIZE_ANNOTATION, color=clr,
+                             fontsize=FONT_SIZE_ANNOTATION, color=CTRL_COLOR,
                              va='center', ha='left', fontweight='bold', zorder=15,
                              annotation_clip=False)
 
@@ -870,10 +902,12 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
         ax_traj.set_title(f'{outcome_labels[outcome]}')
 
         # === Bottom row: time-dependent AUROC ===
-        if len(case_df) > 0 and len(ctrl_df) > 0:
-            t_auc, auc_curve = _sliding_window_auc(
-                case_df, ctrl_df, window=1.0, step=0.1,
-                min_cases=5, min_ctrls=10)
+        # Compare case scores in each time window against ALL control scores
+        if len(case_df) > 0 and n_ctrls > 0:
+            ctrl_pat_scores = ctrl_summary['pat_scores']
+            t_auc, auc_curve = _sliding_window_auc_vs_flat_ctrl(
+                case_df, ctrl_pat_scores, window=1.0, step=0.1,
+                min_cases=5)
             valid = ~np.isnan(auc_curve)
             ax_auc.plot(t_auc[valid], auc_curve[valid], color='0.3',
                         linewidth=LINE_WIDTH_THICK)
