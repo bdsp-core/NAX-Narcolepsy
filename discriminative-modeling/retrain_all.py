@@ -39,7 +39,7 @@ models_config = define_models_config()
 tasks = {
     'nt1_vs_others': {1: 1, 2: 0, 3: None, 4: 0},
     'nt2ih_vs_others': {1: 0, 2: 1, 3: None, 4: 0},
-    'any_narcolepsy_vs_others': {1: 1, 2: 1, 3: None, 4: 0},
+    'any_narcolepsy_vs_others': {1: 1, 2: 1, 3: 1, 4: 0},
 }
 
 for task_name, label_map in tasks.items():
