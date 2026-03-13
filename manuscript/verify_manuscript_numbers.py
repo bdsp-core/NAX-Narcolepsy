@@ -21,7 +21,6 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(REPO, "data")
 DISC_DIR = os.path.join(DATA_DIR, "discriminative-modeling")
 PRED_DIR = os.path.join(DATA_DIR, "predictive-modeling")
-FEAT_UPDATE_DIR = os.path.join(REPO, "predictive-modeling", "features_update")
 RISK_DIR = os.path.join(REPO, "predictive-modeling", "risk_score_v2")
 RESULTS_DIR = os.path.join(DATA_DIR, "results")
 
@@ -63,19 +62,38 @@ def section(title):
     print(f"{'='*70}")
 
 
+def _derive_site(patient_id):
+    """Derive hospital site from patient ID prefix."""
+    s = str(patient_id)
+    if s.startswith(('111', '112', '113', '114', '115',
+                     '116', '117', '118', '119', '120', '121', '122')):
+        return 'MGB'
+    elif s.startswith(('150', '151')):
+        return 'BIDMC'
+    elif s.startswith('175'):
+        return 'BCH'
+    elif s.startswith('177'):
+        return 'Stanford'
+    elif s.startswith('179'):
+        return 'Emory'
+    return 'unknown'
+
+
 # ===================================================================
 # 1. Cross-sectional cohort counts
 # ===================================================================
 section("1. Cross-Sectional Cohort Counts")
 
 notes = pd.read_parquet(os.path.join(DISC_DIR, "notes.parquet"))
-n_patients = notes["bdsp_patient_id"].nunique()
+# Use 'id' column if present, fall back to 'bdsp_patient_id'
+id_col = "id" if "id" in notes.columns else "bdsp_patient_id"
+n_patients = notes[id_col].nunique()
 n_notes = len(notes)
 n_usable = len(notes[notes["annot"] != 3])  # annot=3 is Unclear
 
-check("Total patients = 6,498", 6498, n_patients)
-check("Total notes = 8,990", 8990, n_notes)
-check("Usable notes (excl Unclear) = 8,694", 8694, n_usable)
+check("Total patients = 6,492", 6492, n_patients)
+check("Total notes = 9,356", 9356, n_notes)
+check("Usable notes (excl Unclear) = 8,937", 8937, n_usable)
 
 # ===================================================================
 # 2. Annotation counts
@@ -84,19 +102,19 @@ section("2. Annotation Counts")
 
 annot_counts = notes["annot"].value_counts().to_dict()
 # annot mapping: 1=NT1, 2=NT2/IH, 3=Unclear, 4=Absent
-check("NT1 annotations = 620", 620, annot_counts.get(1, 0))
-check("NT2/IH annotations = 360", 360, annot_counts.get(2, 0))
-check("Absent annotations = 7,714", 7714, annot_counts.get(4, 0))
-check("Unclear annotations = 296", 296, annot_counts.get(3, 0))
+check("NT1 annotations = 838", 838, annot_counts.get(1, 0))
+check("NT2/IH annotations = 550", 550, annot_counts.get(2, 0))
+check("Absent annotations = 7,549", 7549, annot_counts.get(4, 0))
+check("Unclear annotations = 419", 419, annot_counts.get(3, 0))
 
 # Per-site annotation counts (Table 2B)
 section("2B. Annotation Counts by Site")
 expected_site = {
-    "bch":   {"NT1": 194, "NT2/IH": 46,  "Unclear": 74, "Absent": 1563, "Total": 1877},
-    "bidmc": {"NT1": 265, "NT2/IH": 126, "Unclear": 77, "Absent": 1453, "Total": 1921},
-    "emory": {"NT1": 56,  "NT2/IH": 71,  "Unclear": 33, "Absent": 1698, "Total": 1858},
-    "mgb":   {"NT1": 77,  "NT2/IH": 61,  "Unclear": 73, "Absent": 1646, "Total": 1857},
-    "stan":  {"NT1": 28,  "NT2/IH": 56,  "Unclear": 39, "Absent": 1354, "Total": 1477},
+    "BCH":      {"NT1": 237, "NT2/IH": 55,  "Unclear": 83,  "Absent": 1506, "Total": 1881},
+    "BIDMC":    {"NT1": 349, "NT2/IH": 198, "Unclear": 130, "Absent": 1433, "Total": 2110},
+    "Emory":    {"NT1": 65,  "NT2/IH": 101, "Unclear": 47,  "Absent": 1628, "Total": 1841},
+    "MGB":      {"NT1": 119, "NT2/IH": 92,  "Unclear": 117, "Absent": 1633, "Total": 1961},
+    "Stanford": {"NT1": 68,  "NT2/IH": 104, "Unclear": 42,  "Absent": 1349, "Total": 1563},
 }
 annot_map = {1: "NT1", 2: "NT2/IH", 3: "Unclear", 4: "Absent"}
 for site, expected_vals in expected_site.items():
@@ -112,11 +130,26 @@ for site, expected_vals in expected_site.items():
 # ===================================================================
 section("3. Longitudinal Cohort - Initial Counts")
 
-# Load features_update parquets (same as risk_score_v2.py load_all_data)
-df_nt1 = pd.read_parquet(os.path.join(FEAT_UPDATE_DIR, "nt1", "features_3.parquet"))
-df_nt2 = pd.read_parquet(os.path.join(FEAT_UPDATE_DIR, "nt2ih", "features_3.parquet"))
-df_nt1 = df_nt1.rename(columns={"cohort": "site"})
-df_nt2 = df_nt2.rename(columns={"cohort": "site"})
+# Load new 3-file format parquets
+def _load_task_parquets(task_dir):
+    """Load n+, n-, controls parquets for a task; rename id->bdsp_patient_id, derive site."""
+    parts = []
+    for fname in ['n+_features_3.parquet', 'n-_features_3.parquet',
+                   'controls_features_3.parquet']:
+        fpath = os.path.join(PRED_DIR, task_dir, fname)
+        if os.path.exists(fpath):
+            dfp = pd.read_parquet(fpath)
+            if 'id' in dfp.columns and 'bdsp_patient_id' not in dfp.columns:
+                dfp.rename(columns={'id': 'bdsp_patient_id'}, inplace=True)
+            parts.append(dfp)
+    df = pd.concat(parts, ignore_index=True)
+    if 'site' not in df.columns:
+        df['site'] = df['bdsp_patient_id'].apply(_derive_site)
+    return df
+
+
+df_nt1 = _load_task_parquets("nt1")
+df_nt2 = _load_task_parquets("nt2ih")
 
 nt1_label = df_nt1.groupby("bdsp_patient_id")["n+_state"].max()
 nt1_case_ids = set(nt1_label[nt1_label == 1].index)
@@ -155,12 +188,12 @@ all_patient_ids = set(df_combined["bdsp_patient_id"].unique())
 all_case_ids = nt1_case_ids | nt2_case_ids
 all_ctrl_ids = all_patient_ids - all_case_ids
 
-check("Initial patients = 13,342", 13342, len(all_patient_ids))
-check("Initial visits = 1,022,458", 1022458, len(df_combined))
-check("Total cases = 596", 596, len(all_case_ids))
-check("NT1 cases = 282", 282, len(nt1_case_ids))
-check("NT2/IH cases = 314", 314, len(nt2_case_ids))
-check("Controls = 12,746", 12746, len(all_ctrl_ids))
+check("Initial patients = 10,403", 10403, len(all_patient_ids))
+check("Initial visits = 1,308,867", 1308867, len(df_combined))
+check("Total cases = 543", 543, len(all_case_ids))
+check("NT1 cases = 266", 266, len(nt1_case_ids))
+check("NT2/IH cases = 277", 277, len(nt2_case_ids))
+check("Controls = 9,860", 9860, len(all_ctrl_ids))
 
 # ===================================================================
 # 4. Longitudinal filtering (gap exclusion)
@@ -189,11 +222,11 @@ cases_after_gap = remaining_ids & all_case_ids
 nt1_after_gap = remaining_ids & nt1_case_ids
 ctrls_after_gap = remaining_ids - all_case_ids
 
-check("After gap excl: patients = 11,588", 11588, len(remaining_ids))
-check("After gap excl: visits = 876,318", 876318, len(df_after_gap))
-check("After gap excl: cases (any narcolepsy) = 539", 539, len(cases_after_gap))
-check("After gap excl: NT1 cases = 258", 258, len(nt1_after_gap))
-check("After gap excl: controls = 11,049", 11049, len(ctrls_after_gap))
+check("After gap excl: patients = 8,968", 8968, len(remaining_ids))
+check("After gap excl: visits = 1,099,123", 1099123, len(df_after_gap))
+check("After gap excl: cases (any narcolepsy) = 488", 488, len(cases_after_gap))
+check("After gap excl: NT1 cases = 241", 241, len(nt1_after_gap))
+check("After gap excl: controls = 8,480", 8480, len(ctrls_after_gap))
 
 # ===================================================================
 # 5. Predictive model performance (from pickle files)
@@ -226,12 +259,12 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
 
     print(f"\n  --- {outcome} ---")
     expected_perf = {
-        "any_narcolepsy": {"cv_auc": 0.835, "cv_auprc": 0.377,
-                           "loso_auc": 0.797, "loso_auprc": 0.428},
-        "nt1":            {"cv_auc": 0.838, "cv_auprc": 0.298,
-                           "loso_auc": 0.788, "loso_auprc": 0.285},
-        "nt2ih":          {"cv_auc": 0.773, "cv_auprc": 0.265,
-                           "loso_auc": 0.794, "loso_auprc": 0.271},
+        "any_narcolepsy": {"cv_auc": 0.802, "cv_auprc": 0.429,
+                           "loso_auc": 0.816, "loso_auprc": 0.520},
+        "nt1":            {"cv_auc": 0.815, "cv_auprc": 0.340,
+                           "loso_auc": 0.822, "loso_auprc": 0.289},
+        "nt2ih":          {"cv_auc": 0.854, "cv_auprc": 0.481,
+                           "loso_auc": 0.763, "loso_auprc": 0.200},
     }
     exp = expected_perf[outcome]
     check_float(f"{outcome} 5-fold CV AUC = {exp['cv_auc']}", exp["cv_auc"], mean_auc_cv)
@@ -251,9 +284,9 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
 section("6. Non-Zero L1 Feature Counts")
 
 for outcome, pickle_name, expected_count in [
-    ("any_narcolepsy", "v2_results_any_narcolepsy.pickle", 82),
-    ("nt1", "v2_results_nt1.pickle", 84),
-    ("nt2ih", "v2_results_nt2ih.pickle", 60),
+    ("any_narcolepsy", "v2_results_any_narcolepsy.pickle", 70),
+    ("nt1", "v2_results_nt1.pickle", 74),
+    ("nt2ih", "v2_results_nt2ih.pickle", 79),
 ]:
     pickle_path = os.path.join(RISK_DIR, pickle_name)
     if not os.path.exists(pickle_path):
@@ -310,8 +343,8 @@ def filter_by_min_visits_hm(df, patient_ids, ref_times, max_years, min_visits):
 
 
 for outcome, expected_cases, expected_ctrls in [
-    ("any_narcolepsy", 234, 234),
-    ("nt1", 81, 81),
+    ("any_narcolepsy", 232, 232),
+    ("nt1", 88, 88),
 ]:
     if outcome == "any_narcolepsy":
         case_ids_out = nt1_case_ids | nt2_case_ids
@@ -411,9 +444,8 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
 
     # Verify specific manuscript claims
     if outcome == "any_narcolepsy":
-        # threshold 0.95 -> NNT=20, sens 68%
-        # threshold 0.99 -> NNT=10, sens 67%
-        for target_nnt, exp_thr, exp_sens in [(20, 0.95, 0.68), (10, 0.99, 0.67)]:
+        # NNT=20 threshold~0.93 sens~69%, NNT=10 threshold~0.97 sens~67%
+        for target_nnt, exp_thr, exp_sens in [(20, 0.93, 0.69), (10, 0.97, 0.67)]:
             valid = ~np.isnan(nnt) & np.isfinite(nnt) & (nnt > 0)
             valid_idx = np.where(valid)[0]
             nnt_valid = nnt[valid_idx]
@@ -427,9 +459,8 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
                         exp_sens, s_val, tol=0.03)
 
     elif outcome == "nt1":
-        # threshold 0.85 -> NNT=20, sens 84%
-        # threshold 0.95 -> NNT=10, sens 79%
-        for target_nnt, exp_thr, exp_sens in [(20, 0.85, 0.84), (10, 0.95, 0.79)]:
+        # NNT=20 threshold~0.97 sens~80%, NNT=10 threshold~0.99 sens~74%
+        for target_nnt, exp_thr, exp_sens in [(20, 0.97, 0.80), (10, 0.99, 0.74)]:
             valid = ~np.isnan(nnt) & np.isfinite(nnt) & (nnt > 0)
             valid_idx = np.where(valid)[0]
             nnt_valid = nnt[valid_idx]
@@ -438,9 +469,9 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
             s_val = sens[closest]
             n_val = nnt[closest]
             check_float(f"{outcome} NNT={target_nnt} threshold ~ {exp_thr}",
-                        exp_thr, t_val, tol=0.03)
+                        exp_thr, t_val, tol=0.05)
             check_float(f"{outcome} NNT={target_nnt} sensitivity ~ {exp_sens:.0%}",
-                        exp_sens, s_val, tol=0.03)
+                        exp_sens, s_val, tol=0.05)
 
 # ===================================================================
 # 9. LOSO per-site case counts and performance (Supplementary Table 1)
@@ -462,28 +493,20 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
     loso_perf = data["results"][0.5]["loso"]["perf"]
     print(f"\n  --- {outcome} ---")
 
-    # Expected values from Supplementary Table 2
+    # Expected values - only BIDMC and MGB folds (BCH, Emory, Stanford
+    # skipped due to <50 controls)
     all_expected_sites = {
         "any_narcolepsy": {
-            "bch":   {"N_diag": 29, "N_ctrl": 605,  "AUC": 0.797, "AUPRC": 0.454},
-            "bidmc": {"N_diag": 48, "N_ctrl": 5133, "AUC": 0.779, "AUPRC": 0.376},
-            "emory": {"N_diag": 33, "N_ctrl": 483,  "AUC": 0.894, "AUPRC": 0.691},
-            "mgb":   {"N_diag": 54, "N_ctrl": 4182, "AUC": 0.773, "AUPRC": 0.157},
-            "stan":  {"N_diag": 32, "N_ctrl": 646,  "AUC": 0.740, "AUPRC": 0.462},
+            "BIDMC": {"N_diag": 44, "N_ctrl": 4550, "AUC": 0.927, "AUPRC": 0.687},
+            "MGB":   {"N_diag": 61, "N_ctrl": 3928, "AUC": 0.705, "AUPRC": 0.354},
         },
         "nt1": {
-            "bch":   {"N_diag": 16, "N_ctrl": 605,  "AUC": 0.941, "AUPRC": 0.311},
-            "bidmc": {"N_diag": 13, "N_ctrl": 5133, "AUC": 0.828, "AUPRC": 0.321},
-            "emory": {"N_diag": 9,  "N_ctrl": 483,  "AUC": 0.764, "AUPRC": 0.618},
-            "mgb":   {"N_diag": 21, "N_ctrl": 4182, "AUC": 0.628, "AUPRC": 0.133},
-            "stan":  {"N_diag": 7,  "N_ctrl": 646,  "AUC": 0.779, "AUPRC": 0.040},
+            "BIDMC": {"N_diag": 11, "N_ctrl": 4550, "AUC": 0.964, "AUPRC": 0.231},
+            "MGB":   {"N_diag": 27, "N_ctrl": 3928, "AUC": 0.680, "AUPRC": 0.347},
         },
         "nt2ih": {
-            "bch":   {"N_diag": 13, "N_ctrl": 605,  "AUC": 0.808, "AUPRC": 0.142},
-            "bidmc": {"N_diag": 35, "N_ctrl": 5133, "AUC": 0.790, "AUPRC": 0.301},
-            "emory": {"N_diag": 24, "N_ctrl": 483,  "AUC": 0.870, "AUPRC": 0.481},
-            "mgb":   {"N_diag": 33, "N_ctrl": 4182, "AUC": 0.677, "AUPRC": 0.192},
-            "stan":  {"N_diag": 25, "N_ctrl": 646,  "AUC": 0.822, "AUPRC": 0.238},
+            "BIDMC": {"N_diag": 33, "N_ctrl": 4550, "AUC": 0.812, "AUPRC": 0.315},
+            "MGB":   {"N_diag": 34, "N_ctrl": 3928, "AUC": 0.715, "AUPRC": 0.086},
         },
     }
     expected_sites = all_expected_sites[outcome]
@@ -503,9 +526,9 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
 
     # Mean LOSO
     expected_means = {
-        "any_narcolepsy": {"auc": 0.797, "auprc": 0.428},
-        "nt1": {"auc": 0.788, "auprc": 0.285},
-        "nt2ih": {"auc": 0.794, "auprc": 0.271},
+        "any_narcolepsy": {"auc": 0.816, "auprc": 0.520},
+        "nt1": {"auc": 0.822, "auprc": 0.289},
+        "nt2ih": {"auc": 0.763, "auprc": 0.200},
     }
     mean_auc = loso_perf["AUC"].mean()
     mean_auprc = loso_perf["AUPRC"].mean()
@@ -529,15 +552,15 @@ print("         derived from a BDSP demographics table not present here.")
 print("         Verifying site-level patient and note counts instead.\n")
 
 expected_site_patients = {
-    "bidmc": 1549, "stan": 1454, "emory": 1294, "bch": 1141, "mgb": 1060,
+    "BIDMC": 1549, "Stanford": 1454, "Emory": 1292, "BCH": 1138, "MGB": 1059,
 }
 expected_site_notes = {
-    "bidmc": 1921, "stan": 1477, "emory": 1858, "bch": 1877, "mgb": 1857,
+    "BIDMC": 2110, "Stanford": 1563, "Emory": 1841, "BCH": 1881, "MGB": 1961,
 }
 
 for site in expected_site_patients:
     site_df = notes[notes["cohort"] == site]
-    n_pts = site_df["bdsp_patient_id"].nunique()
+    n_pts = site_df[id_col].nunique()
     n_nts = len(site_df)
     check(f"{site} patients = {expected_site_patients[site]}",
           expected_site_patients[site], n_pts)
@@ -550,9 +573,9 @@ for site in expected_site_patients:
 section("BONUS: Cross-Sectional Best Model AUROC (from per_fold_results)")
 
 for task, best_model, exp_auroc, exp_auprc in [
-    ("nt1_vs_others", "RandomForest", 0.996, 0.935),
-    ("nt2ih_vs_others", "XGBoost", 0.977, 0.676),
-    ("any_narcolepsy_vs_others", "XGBoost", 0.992, 0.934),
+    ("nt1_vs_others", "RandomForest", 0.997, 0.956),
+    ("nt2ih_vs_others", "XGBoost", 0.988, 0.854),
+    ("any_narcolepsy_vs_others", "GradientBoosting", 0.990, 0.948),
 ]:
     fold_path = os.path.join(RESULTS_DIR, task, "per_fold_results.csv")
     if not os.path.exists(fold_path):

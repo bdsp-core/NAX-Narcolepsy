@@ -35,7 +35,7 @@ apply_style()
 # ── Paths ──────────────────────────────────────────────────────────────────
 BASE = os.path.dirname(os.path.abspath(__file__))
 RISK_DIR = os.path.join(BASE, '..', 'predictive-modeling', 'risk_score_v2')
-FEAT_DIR = os.path.join(BASE, '..', 'predictive-modeling', 'features_update')
+FEAT_DIR = os.path.join(BASE, '..', 'data', 'predictive-modeling')
 MANUSCRIPT_FIG_DIR = os.path.join(BASE, '..', 'manuscript', 'figures')
 
 MAX_YEARS = 2.5
@@ -300,12 +300,24 @@ if __name__ == '__main__':
         outcomes = ['any_narcolepsy', 'nt1']
 
     # Load parquet data (shared across outcomes)
+    # New data format: 3 files per task (n+, n-, controls)
     print("Loading parquet data...")
-    df_nt1 = pd.read_parquet(os.path.join(FEAT_DIR, 'nt1', 'features_3.parquet'))
-    df_nt2 = pd.read_parquet(os.path.join(FEAT_DIR, 'nt2ih', 'features_3.parquet'))
-    for dfp in [df_nt1, df_nt2]:
-        if 'cohort' in dfp.columns:
-            dfp.rename(columns={'cohort': 'site'}, inplace=True)
+
+    def _load_task_data(task_dir):
+        """Load n+, n-, controls parquets for a task; rename id->bdsp_patient_id."""
+        parts = []
+        for fname in ['n+_features_3.parquet', 'n-_features_3.parquet',
+                       'controls_features_3.parquet']:
+            fpath = os.path.join(FEAT_DIR, task_dir, fname)
+            if os.path.exists(fpath):
+                dfp = pd.read_parquet(fpath)
+                if 'id' in dfp.columns and 'bdsp_patient_id' not in dfp.columns:
+                    dfp.rename(columns={'id': 'bdsp_patient_id'}, inplace=True)
+                parts.append(dfp)
+        return pd.concat(parts, ignore_index=True)
+
+    df_nt1 = _load_task_data('nt1')
+    df_nt2 = _load_task_data('nt2ih')
 
     nt1_label = df_nt1.groupby('bdsp_patient_id')['n+_state'].max()
     nt1_case_ids = set(nt1_label[nt1_label == 1].index)

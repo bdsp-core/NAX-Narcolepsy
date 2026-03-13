@@ -54,54 +54,82 @@ MANUSCRIPT_FIG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 # Data loading
 # ---------------------------------------------------------------------------
 
+def _derive_site(patient_id):
+    """Derive hospital site from patient ID prefix."""
+    s = str(patient_id)
+    if s.startswith(('111', '112', '113', '114', '115',
+                     '116', '117', '118', '119', '120', '121', '122')):
+        return 'MGB'
+    elif s.startswith(('150', '151')):
+        return 'BIDMC'
+    elif s.startswith('175'):
+        return 'BCH'
+    elif s.startswith('177'):
+        return 'Stanford'
+    elif s.startswith('179'):
+        return 'Emory'
+    return 'unknown'
+
+
 def load_all_data():
     """
-    Load NT1 and NT2/IH parquets (cases AND non-cases from each).
+    Load NT1 and NT2/IH parquets (cases, negatives, and controls).
     Non-case patients from both disease parquets serve as controls,
     giving every site adequate controls for LOSO analysis.
     Returns: df, feat_names, pat_info dict
     """
     base = os.path.dirname(os.path.abspath(__file__))
-    # resolve features_update relative to repo root if running from risk_score_v2/
-    feat_base = os.path.join(base, 'features_update')
-    if not os.path.isdir(feat_base):
-        feat_base = os.path.join(base, '..', 'features_update')
+    repo_root = os.path.join(base, '..', '..')
+    feat_base = os.path.join(repo_root, 'data', 'predictive-modeling')
     print("Loading all data...")
 
-    # --- NT1 parquet (cases + non-cases) ---
-    df_nt1 = pd.read_parquet(os.path.join(feat_base, 'nt1/features_3.parquet'))
-    df_nt1 = df_nt1.rename(columns={'cohort': 'site'}).drop(columns=['filename'], errors='ignore')
-    nt1_label = df_nt1.groupby('bdsp_patient_id')['n+_state'].max()
-    nt1_case_ids = set(nt1_label[nt1_label == 1].index)
-    nt1_noncase_ids = set(nt1_label[nt1_label == 0].index)
+    def _load_task(task_dir, task_label):
+        """Load n+, n-, and controls parquets for a task; return cases and noncases."""
+        task_path = os.path.join(feat_base, task_dir)
+        df_pos = pd.read_parquet(os.path.join(task_path, 'n+_features_3.parquet'))
+        df_neg = pd.read_parquet(os.path.join(task_path, 'n-_features_3.parquet'))
+        df_ctrl = pd.read_parquet(os.path.join(task_path, 'controls_features_3.parquet'))
 
-    df_nt1_cases = df_nt1[df_nt1['bdsp_patient_id'].isin(nt1_case_ids)].copy()
-    df_nt1_cases['case_type'] = 'nt1'
-    df_nt1_noncases = df_nt1[df_nt1['bdsp_patient_id'].isin(nt1_noncase_ids)].copy()
-    df_nt1_noncases['case_type'] = 'control'
-    print(f"  NT1 parquet: {len(nt1_case_ids)} cases, "
-          f"{len(nt1_noncase_ids)} non-cases")
+        # Rename 'id' -> 'bdsp_patient_id' for consistency with downstream code
+        for df_part in [df_pos, df_neg, df_ctrl]:
+            if 'id' in df_part.columns and 'bdsp_patient_id' not in df_part.columns:
+                df_part.rename(columns={'id': 'bdsp_patient_id'}, inplace=True)
 
-    # --- NT2/IH parquet (cases + non-cases) ---
-    df_nt2 = pd.read_parquet(os.path.join(feat_base, 'nt2ih/features_3.parquet'))
-    df_nt2 = df_nt2.rename(columns={'cohort': 'site'}).drop(columns=['filename'], errors='ignore')
-    nt2_label = df_nt2.groupby('bdsp_patient_id')['n+_state'].max()
-    nt2_case_ids = set(nt2_label[nt2_label == 1].index)
-    nt2_noncase_ids = set(nt2_label[nt2_label == 0].index)
+        # Derive site from patient ID
+        for df_part in [df_pos, df_neg, df_ctrl]:
+            if 'site' not in df_part.columns:
+                df_part['site'] = df_part['bdsp_patient_id'].apply(_derive_site)
 
-    df_nt2_cases = df_nt2[df_nt2['bdsp_patient_id'].isin(nt2_case_ids)].copy()
-    df_nt2_cases['case_type'] = 'nt2ih'
-    df_nt2_noncases = df_nt2[df_nt2['bdsp_patient_id'].isin(nt2_noncase_ids)].copy()
-    df_nt2_noncases['case_type'] = 'control'
-    print(f"  NT2/IH parquet: {len(nt2_case_ids)} cases, "
-          f"{len(nt2_noncase_ids)} non-cases")
+        # Drop metadata columns not needed downstream
+        drop_cols = ['date', 'num_visits_since_first_visit', 'filename', 'cohort']
+        for df_part in [df_pos, df_neg, df_ctrl]:
+            df_part.drop(columns=[c for c in drop_cols if c in df_part.columns],
+                         inplace=True, errors='ignore')
+
+        df_pos['case_type'] = task_label
+        df_neg['case_type'] = 'control'
+        df_ctrl['case_type'] = 'control'
+
+        case_ids = set(df_pos['bdsp_patient_id'].unique())
+        noncase_ids = set(df_neg['bdsp_patient_id'].unique()) | set(df_ctrl['bdsp_patient_id'].unique())
+        print(f"  {task_label} parquets: {len(case_ids)} cases, "
+              f"{len(noncase_ids)} non-cases ({df_neg['bdsp_patient_id'].nunique()} neg + "
+              f"{df_ctrl['bdsp_patient_id'].nunique()} ctrl)")
+        return df_pos, pd.concat([df_neg, df_ctrl], ignore_index=True)
+
+    df_nt1_cases, df_nt1_noncases = _load_task('nt1', 'nt1')
+    nt1_case_ids = set(df_nt1_cases['bdsp_patient_id'].unique())
+    df_nt2_cases, df_nt2_noncases = _load_task('nt2ih', 'nt2ih')
+    nt2_case_ids = set(df_nt2_cases['bdsp_patient_id'].unique())
 
     # --- Align feature columns ---
     meta_cols = {'bdsp_patient_id', 'site', 'cohort', 'date', 'n+_state',
                  'days_since_first_visit', 'num_visits_since_first_visit',
                  'case_type', 'filename'}
-    feat_cols = sorted(set(df_nt1.columns) - meta_cols)
-    for name, df_check in [('NT2/IH', df_nt2)]:
+    feat_cols = sorted(set(df_nt1_cases.columns) - meta_cols)
+    for name, df_check in [('NT2/IH cases', df_nt2_cases),
+                           ('NT1 noncases', df_nt1_noncases),
+                           ('NT2/IH noncases', df_nt2_noncases)]:
         missing = set(feat_cols) - set(df_check.columns)
         if missing:
             print(f"  Warning: {len(missing)} features missing from {name}")
@@ -313,7 +341,10 @@ def _train_one_fold(X, y, sids, tr_mask, te_mask, feat_names,
     X_te_s = scaler.transform(X_te_sel)
 
     pos_tr, neg_tr = build_patient_index(sids_tr, y_tr)
-    if len(pos_tr) == 0:
+    if len(pos_tr) == 0 or len(neg_tr) == 0:
+        return None, None, None, None
+    # Also check test set has both classes
+    if len(np.unique(y_te)) < 2:
         return None, None, None, None
 
     # --- Inner CV for alpha selection ---
@@ -461,15 +492,25 @@ def train_loso_cv(df, feat_names):
     coefs_all = []
     metrics_all = []
 
+    MIN_CONTROLS_LOSO = 50  # skip folds with too few controls to be meaningful
+
     for fold_i, held_out in enumerate(site_names):
         tr = sites != held_out
         te = sites == held_out
+
+        # Check test fold has enough controls for meaningful evaluation
+        te_sids_unique = set(sids[te])
+        te_ctrl_count = len([s for s in te_sids_unique
+                             if y[sids == s].max() == 0])
+        if te_ctrl_count < MIN_CONTROLS_LOSO:
+            print(f"    {held_out}: skipped ({te_ctrl_count} controls < {MIN_CONTROLS_LOSO} minimum)")
+            continue
 
         prob_te, coefs, met, _ = _train_one_fold(
             X, y, sids, tr, te, feat_names, fold_seed=fold_i,
             inner_fold_key=sites, inner_fold_vals=site_names)
         if prob_te is None:
-            print(f"    {held_out}: skipped (no cases)")
+            print(f"    {held_out}: skipped (insufficient data)")
             continue
         scores_cv[te] = prob_te
         coefs_all.append(coefs)

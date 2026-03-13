@@ -74,12 +74,12 @@ def draw_side_text(ax, x_main, y_from, x_side, y_side, text,
 # Shared starting point
 # =============================================================================
 SHARED_START_TITLE = 'EHR Data from 5 BDSP Sites'
-SHARED_START_BODY = 'BCH, BIDMC, Emory, MGB, Stanford\n13,342 patients  |  596 narcolepsy cases (282 NT1, 314 NT2/IH)'
+SHARED_START_BODY = 'BCH, BIDMC, Emory, MGB, Stanford\n10,403 patients  |  543 narcolepsy cases (266 NT1, 277 NT2/IH)'
 
-# Original manual annotation counts (pre-reconciliation)
-# NT1: 620 notes (271 patients), NT2/IH: 360 (280 patients)
-# Unclear: 296 (221 patients), Absent: 7,714 (6,019 patients)
-# Total: 8,990, Usable (excl. Unclear): 8,694
+# Updated annotation counts (v2 data)
+# NT1: 838 notes (312 patients), NT2/IH: 550 (326 patients)
+# Unclear: 419 (281 patients), Absent: 7,549 (5,982 patients)
+# Total: 9,356, Usable (excl. Unclear): 8,937
 
 
 # =============================================================================
@@ -111,7 +111,7 @@ def make_cross_sectional_consort():
     draw_arrow(ax, cx, y2 - 0.045, cx, y3 + 0.025)
     draw_text(ax, cx, y3,
               'Manual Annotation',
-              '6,498 patients, 8,990 notes annotated\n'
+              '6,492 patients, 9,356 notes annotated\n'
               'by 6 physician annotators')
 
     # --- Row 4: Annotation breakdown ---
@@ -119,12 +119,12 @@ def make_cross_sectional_consort():
     draw_arrow(ax, cx, y3 - 0.04, cx, y4 + 0.025)
     draw_text(ax, cx, y4,
               'Manual Annotation by Physician Reviewers',
-              'NT1: 620 notes (271 patients)  |  NT2/IH: 360 notes (280 patients)\n'
-              'Absent: 7,714 notes  |  Unclear: 296 notes')
+              'NT1: 838 notes (312 patients)  |  NT2/IH: 550 notes (326 patients)\n'
+              'Absent: 7,549 notes  |  Unclear: 419 notes')
 
     # --- Exclusion side branch ---
     draw_side_text(ax, cx + 0.20, y4 - 0.035, excl_x, y4 - 0.07,
-                   'Excluded: 296 "Unclear"',
+                   'Excluded: 419 "Unclear"',
                    fontsize=7.5)
 
     # --- Row 5: Final Cohort ---
@@ -132,8 +132,8 @@ def make_cross_sectional_consort():
     draw_arrow(ax, cx, y4 - 0.06, cx, y5 + 0.025)
     draw_text(ax, cx, y5,
               'Final Classification Cohort',
-              '8,694 notes with definitive labels\n'
-              '(271 NT1 patients, 280 NT2/IH patients)')
+              '8,937 notes with definitive labels\n'
+              '(312 NT1 patients, 326 NT2/IH patients)')
 
     # --- Split into three tasks ---
     y6 = 0.30
@@ -145,20 +145,20 @@ def make_cross_sectional_consort():
 
     draw_text(ax, left_x, y6,
               'NT1 vs. Others',
-              'Positive: 620 notes\n'
-              'Negative: 8,074 notes\n'
+              'Positive: 838 notes\n'
+              'Negative: 8,099 notes\n'
               '(NT2/IH + Absent)')
 
     draw_text(ax, mid_x, y6,
               'NT2/IH vs. Others',
-              'Positive: 360 notes\n'
-              'Negative: 8,334 notes\n'
+              'Positive: 550 notes\n'
+              'Negative: 8,387 notes\n'
               '(NT1 + Absent)')
 
     draw_text(ax, right_x, y6,
               'Any Narcolepsy vs. Others',
-              'Positive: 980 notes\n'
-              'Negative: 7,714 notes\n'
+              'Positive: 1,807 notes\n'
+              'Negative: 7,549 notes\n'
               '(Absent only)')
 
     # --- Evaluation ---
@@ -170,19 +170,19 @@ def make_cross_sectional_consort():
     draw_text(ax, left_x, y7,
               'LOSO Cross-Validation',
               '4 classifiers: LR, RF, GBT, XGB\n'
-              'Best: RF (AUROC 0.996)',
+              'Best: RF (AUROC 0.997)',
               fontsize=8)
 
     draw_text(ax, mid_x, y7,
               'LOSO Cross-Validation',
               '4 classifiers: LR, RF, GBT, XGB\n'
-              'Best: XGB (AUROC 0.977)',
+              'Best: XGB (AUROC 0.988)',
               fontsize=8)
 
     draw_text(ax, right_x, y7,
               'LOSO Cross-Validation',
               '4 classifiers: LR, RF, GBT, XGB\n'
-              'Best: XGB (AUROC 0.992)',
+              'Best: GBT (AUROC 0.990)',
               fontsize=8)
 
     fig.tight_layout()
@@ -214,20 +214,20 @@ def make_longitudinal_consort():
     draw_arrow(ax, cx, y1 - 0.04, cx, y2 + 0.025)
     draw_text(ax, cx, y2,
               'Longitudinal Visit Extraction',
-              '13,342 patients  |  1,022,458 visits\n'
-              '596 cases (282 NT1, 314 NT2/IH)  |  12,746 controls')
+              '10,403 patients  |  1,308,867 visits\n'
+              '543 cases (266 NT1, 277 NT2/IH)  |  9,860 controls')
 
     # --- Row 3: Gap Exclusion ---
     y3 = 0.70
     draw_arrow(ax, cx, y2 - 0.045, cx, y3 + 0.025)
     draw_text(ax, cx, y3,
               'After Gap Exclusion (>5 yr between visits)',
-              '11,588 patients  |  876,318 visits\n'
-              '539 cases (258 NT1, 281 NT2/IH)  |  11,049 controls')
+              '8,968 patients  |  1,099,123 visits\n'
+              '488 cases (243 NT1, 245 NT2/IH)  |  8,480 controls')
 
     draw_side_text(ax, cx + 0.22, y3 - 0.005, excl_x, y3 - 0.04,
-                   'Excluded: 1,754 patients\n'
-                   '24 NT1, 33 NT2/IH, 1,697 controls',
+                   'Excluded: 1,435 patients\n'
+                   '23 NT1, 32 NT2/IH, 1,380 controls',
                    fontsize=7.5)
 
     # --- Row 4: Visit Subsampling ---
@@ -235,8 +235,8 @@ def make_longitudinal_consort():
     draw_arrow(ax, cx, y3 - 0.045, cx, y4 + 0.025)
     draw_text(ax, cx, y4,
               'After Visit Subsampling (max 20/patient)',
-              '11,588 patients  |  164,383 visits\n'
-              '539 cases (258 NT1, 281 NT2/IH)  |  11,049 controls')
+              '8,968 patients  |  135,426 visits\n'
+              '488 cases (243 NT1, 245 NT2/IH)  |  8,480 controls')
 
     draw_side_text(ax, cx + 0.22, y4 - 0.005, excl_x, y4 - 0.035,
                    'Visits reduced: 876,318 → 164,383\n'
@@ -273,22 +273,21 @@ def make_longitudinal_consort():
 
     draw_text(ax, left_x, y7,
               'Any Narcolepsy Model',
-              '196 cases (NT1 + NT2/IH)\n'
-              '11,049 controls\n'
-              '155,613 visits',
+              '191 cases (NT1 + NT2/IH)\n'
+              '8,480 controls',
               fontsize=8)
 
     draw_text(ax, mid_x, y7,
               'NT1-Only Model',
-              '66 NT1 cases\n'
-              '11,049 controls\n'
+              '72 NT1 cases\n'
+              '8,480 controls\n'
               'NT2/IH excluded',
               fontsize=8)
 
     draw_text(ax, right_x, y7,
               'NT2/IH-Only Model',
-              '130 NT2/IH cases\n'
-              '11,049 controls\n'
+              '119 NT2/IH cases\n'
+              '8,480 controls\n'
               'NT1 excluded',
               fontsize=8)
 
@@ -300,20 +299,20 @@ def make_longitudinal_consort():
 
     draw_text(ax, left_x, y8,
               'Evaluation',
-              '5-fold CV: AUC 0.835\n'
-              'LOSO: AUC 0.797',
+              '5-fold CV: AUC 0.802\n'
+              'LOSO: AUC 0.816',
               fontsize=8)
 
     draw_text(ax, mid_x, y8,
               'Evaluation',
-              '5-fold CV: AUC 0.838\n'
-              'LOSO: AUC 0.788',
+              '5-fold CV: AUC 0.815\n'
+              'LOSO: AUC 0.822',
               fontsize=8)
 
     draw_text(ax, right_x, y8,
               'Evaluation',
-              '5-fold CV: AUC 0.773\n'
-              'LOSO: AUC 0.794',
+              '5-fold CV: AUC 0.854\n'
+              'LOSO: AUC 0.763',
               fontsize=8)
 
     fig.tight_layout()

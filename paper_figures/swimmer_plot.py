@@ -159,8 +159,11 @@ if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     print("Loading swimmer data...")
-    swimmer_df = pl.read_parquet(
-        os.path.join(DATA_DIR, 'discriminative-modeling', 'bdsp_narco_swimmer.parquet'))
+    # Swimmer data not yet in updated discriminative-modeling; use old copy
+    swimmer_path = os.path.join(DATA_DIR, 'discriminative-modeling', 'bdsp_narco_swimmer.parquet')
+    if not os.path.exists(swimmer_path):
+        swimmer_path = os.path.join(DATA_DIR, 'discriminative-modeling_old', 'bdsp_narco_swimmer.parquet')
+    swimmer_df = pl.read_parquet(swimmer_path)
 
     # Filter to post-1990 for cleaner visualization
     swimmer_df = swimmer_df.filter(pl.col('start_date').dt.year() > 1990)
