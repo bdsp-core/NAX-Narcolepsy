@@ -198,9 +198,10 @@ check("Controls = 9,860", 9860, len(all_ctrl_ids))
 # ===================================================================
 # 4. Longitudinal filtering (gap exclusion)
 # ===================================================================
-section("4. Longitudinal Cohort - After Gap Exclusion")
+section("4. Longitudinal Cohort - After Gap Exclusion (cases only)")
 
 # Replicate gap detection from risk_score_v2.py
+# Gap exclusion applies only to cases (controls kept regardless)
 pat_info = {}
 for sid, grp in df_combined.groupby("bdsp_patient_id"):
     t_vals = grp["days_since_first_visit"].values
@@ -214,19 +215,22 @@ for sid, grp in df_combined.groupby("bdsp_patient_id"):
         "case_type": case_type,
     }
 
-exclude_gap = {sid for sid, info in pat_info.items() if info["has_gap"]}
+exclude_gap = {sid for sid, info in pat_info.items()
+               if info["has_gap"] and info["has_event"]}
 remaining_ids = all_patient_ids - exclude_gap
 df_after_gap = df_combined[~df_combined["bdsp_patient_id"].isin(exclude_gap)]
 
 cases_after_gap = remaining_ids & all_case_ids
 nt1_after_gap = remaining_ids & nt1_case_ids
+nt2ih_after_gap = remaining_ids & nt2_case_ids
 ctrls_after_gap = remaining_ids - all_case_ids
 
-check("After gap excl: patients = 8,968", 8968, len(remaining_ids))
-check("After gap excl: visits = 1,099,123", 1099123, len(df_after_gap))
+check("After gap excl: patients = 10,348", 10348, len(remaining_ids))
+check("After gap excl: visits = 1,300,421", 1300421, len(df_after_gap))
 check("After gap excl: cases (any narcolepsy) = 488", 488, len(cases_after_gap))
 check("After gap excl: NT1 cases = 241", 241, len(nt1_after_gap))
-check("After gap excl: controls = 8,480", 8480, len(ctrls_after_gap))
+check("After gap excl: NT2/IH cases = 247", 247, len(nt2ih_after_gap))
+check("After gap excl: controls = 9,860", 9860, len(ctrls_after_gap))
 
 # ===================================================================
 # 5. Predictive model performance (from pickle files)
@@ -259,12 +263,12 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
 
     print(f"\n  --- {outcome} ---")
     expected_perf = {
-        "any_narcolepsy": {"cv_auc": 0.802, "cv_auprc": 0.429,
-                           "loso_auc": 0.816, "loso_auprc": 0.520},
-        "nt1":            {"cv_auc": 0.815, "cv_auprc": 0.340,
-                           "loso_auc": 0.822, "loso_auprc": 0.289},
-        "nt2ih":          {"cv_auc": 0.854, "cv_auprc": 0.481,
-                           "loso_auc": 0.763, "loso_auprc": 0.200},
+        "any_narcolepsy": {"cv_auc": 0.846, "cv_auprc": 0.395,
+                           "loso_auc": 0.772, "loso_auprc": 0.234},
+        "nt1":            {"cv_auc": 0.839, "cv_auprc": 0.401,
+                           "loso_auc": 0.730, "loso_auprc": 0.229},
+        "nt2ih":          {"cv_auc": 0.820, "cv_auprc": 0.314,
+                           "loso_auc": 0.722, "loso_auprc": 0.234},
     }
     exp = expected_perf[outcome]
     check_float(f"{outcome} 5-fold CV AUC = {exp['cv_auc']}", exp["cv_auc"], mean_auc_cv)
@@ -284,9 +288,9 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
 section("6. Non-Zero L1 Feature Counts")
 
 for outcome, pickle_name, expected_count in [
-    ("any_narcolepsy", "v2_results_any_narcolepsy.pickle", 70),
-    ("nt1", "v2_results_nt1.pickle", 74),
-    ("nt2ih", "v2_results_nt2ih.pickle", 79),
+    ("any_narcolepsy", "v2_results_any_narcolepsy.pickle", 63),
+    ("nt1", "v2_results_nt1.pickle", 80),
+    ("nt2ih", "v2_results_nt2ih.pickle", 85),
 ]:
     pickle_path = os.path.join(RISK_DIR, pickle_name)
     if not os.path.exists(pickle_path):
@@ -444,8 +448,8 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
 
     # Verify specific manuscript claims
     if outcome == "any_narcolepsy":
-        # NNT=20 threshold~0.93 sens~69%, NNT=10 threshold~0.97 sens~67%
-        for target_nnt, exp_thr, exp_sens in [(20, 0.93, 0.69), (10, 0.97, 0.67)]:
+        # NNT~20 threshold~0.97 sens~71%, NNT~10 threshold~0.99 sens~70%
+        for target_nnt, exp_thr, exp_sens in [(20, 0.97, 0.71), (10, 0.99, 0.70)]:
             valid = ~np.isnan(nnt) & np.isfinite(nnt) & (nnt > 0)
             valid_idx = np.where(valid)[0]
             nnt_valid = nnt[valid_idx]
@@ -459,8 +463,8 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
                         exp_sens, s_val, tol=0.03)
 
     elif outcome == "nt1":
-        # NNT=20 threshold~0.97 sens~80%, NNT=10 threshold~0.99 sens~74%
-        for target_nnt, exp_thr, exp_sens in [(20, 0.97, 0.80), (10, 0.99, 0.74)]:
+        # NNT~20 threshold~0.97 sens~83%, NNT~10 threshold~0.99 sens~83%
+        for target_nnt, exp_thr, exp_sens in [(20, 0.97, 0.83), (10, 0.99, 0.83)]:
             valid = ~np.isnan(nnt) & np.isfinite(nnt) & (nnt > 0)
             valid_idx = np.where(valid)[0]
             nnt_valid = nnt[valid_idx]
@@ -497,16 +501,16 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
     # skipped due to <50 controls)
     all_expected_sites = {
         "any_narcolepsy": {
-            "BIDMC": {"N_diag": 44, "N_ctrl": 4550, "AUC": 0.927, "AUPRC": 0.687},
-            "MGB":   {"N_diag": 61, "N_ctrl": 3928, "AUC": 0.705, "AUPRC": 0.354},
+            "BIDMC": {"N_diag": 44, "N_ctrl": 4976, "AUC": 0.868, "AUPRC": 0.309},
+            "MGB":   {"N_diag": 54, "N_ctrl": 4882, "AUC": 0.676, "AUPRC": 0.159},
         },
         "nt1": {
-            "BIDMC": {"N_diag": 11, "N_ctrl": 4550, "AUC": 0.964, "AUPRC": 0.231},
-            "MGB":   {"N_diag": 27, "N_ctrl": 3928, "AUC": 0.680, "AUPRC": 0.347},
+            "BIDMC": {"N_diag": 11, "N_ctrl": 4976, "AUC": 0.858, "AUPRC": 0.251},
+            "MGB":   {"N_diag": 26, "N_ctrl": 4882, "AUC": 0.602, "AUPRC": 0.207},
         },
         "nt2ih": {
-            "BIDMC": {"N_diag": 33, "N_ctrl": 4550, "AUC": 0.812, "AUPRC": 0.315},
-            "MGB":   {"N_diag": 34, "N_ctrl": 3928, "AUC": 0.715, "AUPRC": 0.086},
+            "BIDMC": {"N_diag": 33, "N_ctrl": 4976, "AUC": 0.833, "AUPRC": 0.313},
+            "MGB":   {"N_diag": 28, "N_ctrl": 4882, "AUC": 0.612, "AUPRC": 0.156},
         },
     }
     expected_sites = all_expected_sites[outcome]
@@ -526,9 +530,9 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
 
     # Mean LOSO
     expected_means = {
-        "any_narcolepsy": {"auc": 0.816, "auprc": 0.520},
-        "nt1": {"auc": 0.822, "auprc": 0.289},
-        "nt2ih": {"auc": 0.763, "auprc": 0.200},
+        "any_narcolepsy": {"auc": 0.772, "auprc": 0.234},
+        "nt1": {"auc": 0.730, "auprc": 0.229},
+        "nt2ih": {"auc": 0.722, "auprc": 0.234},
     }
     mean_auc = loso_perf["AUC"].mean()
     mean_auprc = loso_perf["AUPRC"].mean()

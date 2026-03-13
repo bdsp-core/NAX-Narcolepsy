@@ -167,9 +167,10 @@ def load_all_data():
             'n_visits': len(t_vals), 'has_gap': has_gap, 'case_type': case_type,
         }
 
-    # exclude patients with >5yr gaps
+    # exclude CASES with >5yr gaps (controls kept regardless — gap filtering
+    # is only relevant for cases where temporal continuity matters)
     exclude = {sid for sid, info in pat_info.items()
-               if info['has_gap']}
+               if info['has_gap'] and info['has_event']}
     df = df[~df['bdsp_patient_id'].isin(exclude)].reset_index(drop=True)
     for sid in exclude:
         del pat_info[sid]
