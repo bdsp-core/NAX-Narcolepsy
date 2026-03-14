@@ -39,8 +39,9 @@ NAX-Narcolepsy/
 │   ├── swimmer_plot.py            # Swimmer plot of patient timelines
 │   └── site_trajectories.py       # Site-stratified trajectory sensitivity analysis
 │
-├── manuscript/                    # Manuscript verification
-│   └── verify_manuscript_numbers.py
+├── manuscript/                    # Manuscript verification and figures
+│   ├── verify_manuscript_numbers.py
+│   └── figures/                   # All generated figures (PNG + TIFF)
 │
 ├── build_manuscript_figures.sh    # Regenerate all figures end-to-end
 ├── REPRODUCIBILITY.md             # Full reproducibility guide
