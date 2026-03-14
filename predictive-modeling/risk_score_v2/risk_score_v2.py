@@ -23,6 +23,7 @@ from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import chi2
 from sklearn.metrics import roc_auc_score, average_precision_score
+from scipy.optimize import curve_fit
 from sklearn.model_selection import StratifiedKFold
 from tqdm import tqdm
 import matplotlib
@@ -45,6 +46,11 @@ MAX_VISITS_PER_PATIENT = 20
 TOP_K_FEATURES = 100
 MAX_YEARS_BEFORE_DIAG_TRAIN = 2.5  # training window: [-2.5yr, -0.5yr]
 MAX_YEARS_BEFORE_DIAG_TEST  = 5.0  # testing/scoring window: [-5yr, 0yr]
+EVAL_TIME_YEARS = -1.5   # time point for eFigure 9 AUC evaluation
+EVAL_WINDOW_YEARS = 1.0  # window width around EVAL_TIME_YEARS
+
+# Feature transform: 'cumulative', 'running_mean' (default), or 'running_max'
+FEATURE_TRANSFORM = 'running_mean'
 
 MANUSCRIPT_FIG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                   '..', '..', 'manuscript', 'figures')
@@ -103,7 +109,8 @@ def load_all_data():
                 df_part['site'] = df_part['bdsp_patient_id'].apply(_derive_site)
 
         # Drop metadata columns not needed downstream
-        drop_cols = ['date', 'num_visits_since_first_visit', 'filename', 'cohort']
+        # Keep num_visits_since_first_visit for running_mean/running_max transforms
+        drop_cols = ['date', 'filename', 'cohort']
         for df_part in [df_pos, df_ctrl]:
             df_part.drop(columns=[c for c in drop_cols if c in df_part.columns],
                          inplace=True, errors='ignore')
@@ -125,7 +132,7 @@ def load_all_data():
     # --- Align feature columns ---
     meta_cols = {'bdsp_patient_id', 'site', 'cohort', 'date', 'n+_state',
                  'days_since_first_visit', 'num_visits_since_first_visit',
-                 'case_type', 'filename'}
+                 'case_type', 'filename', 'ever_diagnosed'}
     feat_cols = sorted(set(df_nt1_cases.columns) - meta_cols)
     for name, df_check in [('NT2/IH cases', df_nt2_cases),
                            ('NT1 controls', df_nt1_ctrls),
@@ -136,7 +143,8 @@ def load_all_data():
             feat_cols = [f for f in feat_cols if f not in missing]
 
     keep_cols = ['bdsp_patient_id', 'site', 'n+_state',
-                 'days_since_first_visit', 'case_type'] + feat_cols
+                 'days_since_first_visit', 'num_visits_since_first_visit',
+                 'case_type'] + feat_cols
 
     dfs = []
     for df_part in [df_nt1_cases, df_nt1_ctrls, df_nt2_cases, df_nt2_ctrls]:
@@ -175,6 +183,38 @@ def load_all_data():
     for sid in exclude:
         del pat_info[sid]
     print(f"  After exclusions: {len(df)} rows, {df['bdsp_patient_id'].nunique()} patients")
+
+    # --- Apply feature transform ---
+    if FEATURE_TRANSFORM != 'cumulative':
+        print(f"  Applying feature transform: {FEATURE_TRANSFORM}")
+        df = df.sort_values(['bdsp_patient_id', 'days_since_first_visit']).reset_index(drop=True)
+        if FEATURE_TRANSFORM == 'running_mean':
+            # running_mean = cumulative_count / (visit_number + 1)
+            n_visits = df['num_visits_since_first_visit'].values + 1  # 0-indexed -> 1-indexed
+            n_visits = np.maximum(n_visits, 1)  # avoid division by zero
+            df[feat_cols] = df[feat_cols].values / n_visits[:, np.newaxis]
+        elif FEATURE_TRANSFORM == 'running_max':
+            # Recover per-visit binary features by differencing within each patient,
+            # then take cumulative max (= "ever seen this feature").
+            feat_arr = df[feat_cols].values.astype(np.float64)
+            sids = df['bdsp_patient_id'].values
+            # Diff within patient: first visit keeps its value, rest get diff
+            per_visit = np.zeros_like(feat_arr)
+            per_visit[0] = feat_arr[0]
+            same_patient = sids[1:] == sids[:-1]
+            per_visit[1:][same_patient] = np.maximum(
+                feat_arr[1:][same_patient] - feat_arr[:-1][same_patient], 0)
+            per_visit[1:][~same_patient] = feat_arr[1:][~same_patient]
+            # Cumulative max within patient
+            result = np.zeros_like(feat_arr)
+            result[0] = per_visit[0]
+            for i in range(1, len(feat_arr)):
+                if sids[i] == sids[i - 1]:
+                    result[i] = np.maximum(result[i - 1], per_visit[i])
+                else:
+                    result[i] = per_visit[i]
+            df[feat_cols] = result
+        print(f"  Transform complete")
 
     # --- Subsample visits per patient ---
     print(f"  Subsampling to max {MAX_VISITS_PER_PATIENT} visits/patient...")
@@ -582,9 +622,10 @@ def score_with_final_model(df_full, feat_names, final_artifacts):
     X_sel = X[:, sel_idx]
     X_s = scaler.transform(X_sel)
     scores = clf.predict_proba(X_s)[:, 1]
+    raw_scores = clf.decision_function(X_s)  # log-odds, no clipping
 
     print(f"    Scored {len(scores)} visits")
-    return scores, sids, y, T
+    return scores, sids, y, T, raw_scores
 
 
 def score_full_timeline(df_full, feat_names, fold_map, artifacts_all):
@@ -638,6 +679,57 @@ def score_full_timeline(df_full, feat_names, fold_map, artifacts_all):
     return scores, sids, y, T
 
 
+def compute_time_specific_metrics(scores, sids, y, T, pat_info,
+                                  eval_time=EVAL_TIME_YEARS,
+                                  window=EVAL_WINDOW_YEARS):
+    """Compute AUC/AUPRC at a specific time point relative to diagnosis.
+
+    Cases: average visit scores within [eval_time - window/2, eval_time + window/2].
+    Controls: patient-level mean across all visits (no time alignment).
+    """
+    df = pd.DataFrame({'sid': sids, 'score': scores, 'y': y, 'T': T})
+    df = df.dropna(subset=['score'])
+
+    pat_label = df.groupby('sid')['y'].max()
+    case_sids = set(pat_label[pat_label == 1].index)
+    ctrl_sids = set(pat_label[pat_label == 0].index)
+
+    t_lo = eval_time - window / 2
+    t_hi = eval_time + window / 2
+
+    # Cases: filter to visits in time window, average per patient
+    case_scores = []
+    for sid in case_sids:
+        info = pat_info.get(sid)
+        if info is None or info.get('diag_t') is None:
+            continue
+        diag_t_yr = info['diag_t'] / 365.25
+        sub = df[df['sid'] == sid]
+        t_rel = sub['T'] - diag_t_yr
+        in_window = (t_rel >= t_lo) & (t_rel < t_hi)
+        visits = sub[in_window]
+        if len(visits) > 0:
+            case_scores.append(visits['score'].mean())
+
+    # Controls: patient-level mean across all visits
+    ctrl_scores = df[df['sid'].isin(ctrl_sids)].groupby('sid')['score'].mean().values
+
+    if len(case_scores) < 2 or len(ctrl_scores) < 2:
+        return {'AUC': np.nan, 'AUPRC': np.nan,
+                'N_diag': len(case_scores), 'N_ctrl': len(ctrl_scores)}
+
+    all_scores = np.concatenate([case_scores, ctrl_scores])
+    all_labels = np.concatenate([np.ones(len(case_scores)),
+                                 np.zeros(len(ctrl_scores))])
+
+    return {
+        'AUC': roc_auc_score(all_labels, all_scores),
+        'AUPRC': average_precision_score(all_labels, all_scores),
+        'N_diag': len(case_scores),
+        'N_ctrl': len(ctrl_scores),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Plotting
 # ---------------------------------------------------------------------------
@@ -659,10 +751,13 @@ def _build_traj_data(results, h, pat_info, cv_type='pooled', rng=None):
     r = results[h][cv_type]
     sids_arr = r.get('traj_sids', r['sids'])
     scores = r.get('traj_scores', r['scores'])
+    raw_scores = r.get('traj_raw_scores')  # decision_function log-odds
     y_arr = r.get('traj_y', r['y'])
     T_arr = r.get('traj_T', r['T'])
 
     dtmp = pd.DataFrame({'sid': sids_arr, 'score': scores, 'y': y_arr, 'T': T_arr})
+    if raw_scores is not None:
+        dtmp['raw_score'] = raw_scores
     dtmp = dtmp.dropna(subset=['score'])
 
     pat_label = dtmp.groupby('sid')['y'].max()
@@ -670,6 +765,7 @@ def _build_traj_data(results, h, pat_info, cv_type='pooled', rng=None):
     ctrl_sids = set(pat_label[pat_label == 0].index)
 
     # Cases: align to diagnosis time
+    has_raw = 'raw_score' in dtmp.columns
     case_rows = []
     for sid in case_sids:
         sub = dtmp[dtmp['sid'] == sid].sort_values('T')
@@ -680,12 +776,18 @@ def _build_traj_data(results, h, pat_info, cv_type='pooled', rng=None):
         for _, row in sub.iterrows():
             t_rel = row['T'] - diag_t_yr
             if -MAX_YEARS_BEFORE_DIAG_TEST - 0.1 <= t_rel <= 0.1:
-                case_rows.append({'t_rel': t_rel, 'score': row['score'], 'sid': sid})
+                r_dict = {'t_rel': t_rel, 'score': row['score'], 'sid': sid}
+                if has_raw:
+                    r_dict['raw_score'] = row['raw_score']
+                case_rows.append(r_dict)
     case_df = pd.DataFrame(case_rows) if case_rows else pd.DataFrame(
         columns=['t_rel', 'score', 'sid'])
 
     # Controls: no time alignment — compute patient-level mean scores
-    ctrl_scores = dtmp[dtmp['y'] == 0].groupby('sid')['score'].mean().values
+    ctrl_df = dtmp[dtmp['y'] == 0]
+    ctrl_scores = ctrl_df.groupby('sid')['score'].mean().values
+    ctrl_raw_scores = (ctrl_df.groupby('sid')['raw_score'].mean().values
+                       if has_raw else None)
     n_ctrl = len(ctrl_scores)
     ctrl_mean = np.mean(ctrl_scores) if n_ctrl > 0 else np.nan
     rng_boot = np.random.RandomState(42)
@@ -704,6 +806,7 @@ def _build_traj_data(results, h, pat_info, cv_type='pooled', rng=None):
         'n': n_ctrl, 'mean': ctrl_mean,
         'ci_lo': ci_lo, 'ci_hi': ci_hi,
         'pat_scores': ctrl_scores,
+        'pat_raw_scores': ctrl_raw_scores,
     }
 
     return case_df, ctrl_summary
@@ -798,10 +901,12 @@ def _sliding_window_auc(case_df, ctrl_df, window=1.0, step=0.1,
 
 
 def _sliding_window_auc_vs_flat_ctrl(case_df, ctrl_pat_scores, window=1.0,
-                                      step=0.1, min_cases=5):
+                                      step=0.1, min_cases=5,
+                                      score_col='score'):
     """
     Compute time-varying AUROC: case scores in each time window vs ALL
     control patient-level mean scores (time-independent).
+    score_col: column name to use for AUROC ('score' or 'raw_score').
     """
     t_min = max(case_df['t_rel'].min(), -5.0)
     t_max = min(case_df['t_rel'].max(), 0.1)
@@ -814,7 +919,7 @@ def _sliding_window_auc_vs_flat_ctrl(case_df, ctrl_pat_scores, window=1.0,
         sub = case_df[mask]
         if len(sub) == 0:
             continue
-        case_pat = sub.groupby('sid')['score'].mean().values
+        case_pat = sub.groupby('sid')[score_col].mean().values
         if len(case_pat) < min_cases:
             continue
         all_scores = np.concatenate([case_pat, ctrl_pat_scores])
@@ -823,6 +928,69 @@ def _sliding_window_auc_vs_flat_ctrl(case_df, ctrl_pat_scores, window=1.0,
         auc_vals[i] = roc_auc_score(all_labels, all_scores)
 
     return t_centers, auc_vals
+
+
+def _sigmoid(t, L, U, k, t0):
+    """Sigmoid: L + (U-L) / (1 + exp(-k*(t-t0)))."""
+    return L + (U - L) / (1.0 + np.exp(-k * (t - t0)))
+
+
+def _fit_sigmoid_auroc(case_df, ctrl_pat_scores, score_col='score',
+                       window=1.0, step=0.1, min_cases=5):
+    """
+    Compute empirical windowed AUROC, then fit a monotone sigmoid curve.
+    Returns t_fine (300 pts), sigmoid_mean, sigmoid_lo, sigmoid_hi (95% CI).
+    """
+    t_min = max(case_df['t_rel'].min(), -5.0)
+    t_max = min(case_df['t_rel'].max(), 0.1)
+    t_centers = np.arange(t_min + window / 2, t_max + step, step)
+    auc_vals = np.full(len(t_centers), np.nan)
+    n_cases = np.full(len(t_centers), 0)
+
+    for i, tc in enumerate(t_centers):
+        mask = ((case_df['t_rel'] >= tc - window / 2) &
+                (case_df['t_rel'] < tc + window / 2))
+        sub = case_df[mask]
+        if len(sub) == 0:
+            continue
+        case_pat = sub.groupby('sid')[score_col].mean().values
+        n_cases[i] = len(case_pat)
+        if len(case_pat) < min_cases:
+            continue
+        all_scores = np.concatenate([case_pat, ctrl_pat_scores])
+        all_labels = np.concatenate([np.ones(len(case_pat)),
+                                     np.zeros(len(ctrl_pat_scores))])
+        auc_vals[i] = roc_auc_score(all_labels, all_scores)
+
+    valid = ~np.isnan(auc_vals)
+    t_obs = t_centers[valid]
+    y_obs = auc_vals[valid]
+    w_obs = n_cases[valid]
+
+    t_fine = np.linspace(-5.0, 0.0, 300)
+
+    if len(t_obs) < 4:
+        return t_fine, np.full(300, np.nan), np.full(300, np.nan), np.full(300, np.nan)
+
+    try:
+        popt, pcov = curve_fit(
+            _sigmoid, t_obs, y_obs,
+            p0=[0.7, 0.95, 1.5, -2.5],
+            bounds=([0.5, 0.8, 0.1, -5.0], [0.9, 1.0, 10.0, 0.0]),
+            sigma=1.0 / np.sqrt(w_obs),
+            maxfev=10000)
+        auroc_fit = _sigmoid(t_fine, *popt)
+        # Monte Carlo CI from parameter covariance
+        rng = np.random.RandomState(42)
+        mc_curves = np.array([
+            _sigmoid(t_fine, *rng.multivariate_normal(popt, pcov))
+            for _ in range(500)
+        ])
+        ci_lo = np.percentile(mc_curves, 2.5, axis=0)
+        ci_hi = np.percentile(mc_curves, 97.5, axis=0)
+        return t_fine, auroc_fit, ci_lo, ci_hi
+    except Exception:
+        return t_fine, np.full(300, np.nan), np.full(300, np.nan), np.full(300, np.nan)
 
 
 def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
@@ -858,7 +1026,10 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
         n_cases = case_df['sid'].nunique() if len(case_df) > 0 else 0
         n_ctrls = ctrl_summary['n']
 
-        # === Top row: trajectories ===
+        # === Top row: trajectories (logit scale) ===
+        prob_ticks = [0.1, 0.2, 0.5, 0.8, 0.9, 0.95, 0.99]
+        logit_ticks = [_logit(p) for p in prob_ticks]
+
         # Cases: sliding-window mean + 95% CI
         if len(case_df) > 0:
             t_arr = case_df['t_rel'].values
@@ -868,13 +1039,14 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
                 t_arr, v_arr, s_arr, window=1.5, step=0.1, min_patients=8)
             valid = ~np.isnan(mean_v)
             if valid.any():
-                ax_traj.plot(t_ctr[valid], mean_v[valid], color=CASE_COLOR,
+                ax_traj.plot(t_ctr[valid], _logit(mean_v[valid]), color=CASE_COLOR,
                              linewidth=LINE_WIDTH_THICK, zorder=10)
-                ax_traj.fill_between(t_ctr[valid], ci_lo[valid], ci_hi[valid],
+                ax_traj.fill_between(t_ctr[valid], _logit(ci_lo[valid]),
+                                     _logit(ci_hi[valid]),
                                      color=CASE_COLOR, alpha=0.15, zorder=9)
                 idx = np.where(valid)[0][-1]
                 ax_traj.annotate(f'Cases\n(n={n_cases})',
-                                 xy=(t_ctr[idx], mean_v[idx]), xytext=(6, 0),
+                                 xy=(t_ctr[idx], _logit(mean_v[idx])), xytext=(6, 0),
                                  textcoords='offset points',
                                  fontsize=FONT_SIZE_ANNOTATION, color=CASE_COLOR,
                                  va='center', ha='left', fontweight='bold', zorder=15,
@@ -882,38 +1054,47 @@ def plot_trajectories_combined(all_results, pat_info, cv_type='pooled'):
 
         # Controls: flat line (time alignment is meaningless for non-diagnosed)
         if n_ctrls > 0:
-            xlim = (-5.15, 0.15)
-            ax_traj.axhline(ctrl_summary['mean'], color=CTRL_COLOR,
+            ax_traj.axhline(_logit(ctrl_summary['mean']), color=CTRL_COLOR,
                             linewidth=LINE_WIDTH_THICK, zorder=10)
-            ax_traj.axhspan(ctrl_summary['ci_lo'], ctrl_summary['ci_hi'],
+            ax_traj.axhspan(_logit(ctrl_summary['ci_lo']),
+                            _logit(ctrl_summary['ci_hi']),
                             color=CTRL_COLOR, alpha=0.15, zorder=9)
             ax_traj.annotate(f'Controls\n(n={n_ctrls})',
-                             xy=(0.05, ctrl_summary['mean']), xytext=(6, 0),
+                             xy=(0.05, _logit(ctrl_summary['mean'])), xytext=(6, 0),
                              textcoords='offset points',
                              fontsize=FONT_SIZE_ANNOTATION, color=CTRL_COLOR,
                              va='center', ha='left', fontweight='bold', zorder=15,
                              annotation_clip=False)
 
-        ax_traj.set_ylim(-0.02, 1.05)
-        for yval in [0.2, 0.4, 0.6, 0.8]:
-            ax_traj.axhline(yval, color='gray', linewidth=0.4, linestyle='-', alpha=0.25)
+        ax_traj.set_ylim(_logit(0.08), _logit(0.995))
+        ax_traj.set_yticks(logit_ticks)
+        ax_traj.set_yticklabels([f'{p:.0%}' for p in prob_ticks])
+        for yval in prob_ticks:
+            ax_traj.axhline(_logit(yval), color='gray', linewidth=0.4,
+                            linestyle='-', alpha=0.25)
         if col_i == 0:
             ax_traj.set_ylabel('Mean risk score')
 
         ax_traj.set_title(f'{outcome_labels[outcome]}')
 
-        # === Bottom row: time-dependent AUROC ===
-        # Compare case scores in each time window against ALL control scores
+        # === Bottom row: time-dependent AUROC (empirical sliding window) ===
+        # Use raw decision_function scores (log-odds) for AUROC if available,
+        # to avoid score saturation from predict_proba clipping.
+        use_raw = ('raw_score' in case_df.columns and
+                   ctrl_summary.get('pat_raw_scores') is not None)
+        auc_score_col = 'raw_score' if use_raw else 'score'
+        auc_ctrl_scores = (ctrl_summary['pat_raw_scores'] if use_raw
+                           else ctrl_summary['pat_scores'])
         if len(case_df) > 0 and n_ctrls > 0:
-            ctrl_pat_scores = ctrl_summary['pat_scores']
             t_auc, auc_curve = _sliding_window_auc_vs_flat_ctrl(
-                case_df, ctrl_pat_scores, window=1.0, step=0.1,
-                min_cases=5)
+                case_df, auc_ctrl_scores, window=1.0, step=0.1,
+                min_cases=5, score_col=auc_score_col)
             valid = ~np.isnan(auc_curve)
-            ax_auc.plot(t_auc[valid], auc_curve[valid], color='0.3',
-                        linewidth=LINE_WIDTH_THICK)
-            ax_auc.fill_between(t_auc[valid], 0.5, auc_curve[valid],
-                                color='0.6', alpha=0.10)
+            if valid.any():
+                ax_auc.plot(t_auc[valid], auc_curve[valid],
+                            color='0.3', linewidth=LINE_WIDTH_THICK)
+                ax_auc.fill_between(t_auc[valid], 0.5, auc_curve[valid],
+                                    color='0.6', alpha=0.10)
 
         ax_auc.axhline(0.5, color='gray', linewidth=0.8, linestyle=':', alpha=0.7)
         ax_auc.axhline(0.8, color='gray', linewidth=0.6, linestyle='--', alpha=0.4)
@@ -1029,6 +1210,7 @@ def plot_performance_combined(all_results):
     """Combined performance figure: Nx2 grid.
     Rows: outcomes.  Cols: AUC, AUPRC.
     Each panel: 3 bars (Pooled CV, LOSO, Final model) with per-fold/site dots.
+    Uses time-specific metrics evaluated at t=EVAL_TIME_YEARS.
     """
     outcomes = sorted(all_results.keys(),
                       key=lambda x: ['any_narcolepsy', 'nt1', 'nt2ih'].index(x))
@@ -1049,9 +1231,9 @@ def plot_performance_combined(all_results):
             ax = axes[row_i, col_i]
             add_panel_label(ax, panel_labels[row_i][col_i])
 
-            pooled_vals = results[h]['pooled']['perf'][metric].dropna().values
-            loso_vals = results[h]['loso']['perf'][metric].dropna().values
-            resub_val = results[h]['resubstitution']['perf'][metric].iloc[0]
+            pooled_vals = results[h]['pooled']['time_perf'][metric].dropna().values
+            loso_vals = results[h]['loso']['time_perf'][metric].dropna().values
+            resub_val = results[h]['resubstitution']['time_perf'][metric].iloc[0]
 
             means = [np.mean(pooled_vals), np.mean(loso_vals), resub_val]
             all_dots = [pooled_vals, loso_vals, [resub_val]]
@@ -1077,6 +1259,8 @@ def plot_performance_combined(all_results):
 
             ax.set_title(f'{outcome_labels[outcome]} — {metric}')
 
+    fig.suptitle(f'Performance at t = {EVAL_TIME_YEARS} yr relative to diagnosis',
+                 fontsize=FONT_SIZE_SUPTITLE, y=1.02)
     plt.tight_layout()
     pub_savefig(fig, os.path.join(MANUSCRIPT_FIG_DIR, 'efigure9_predictive_performance.png'))
     plt.close()
@@ -1084,7 +1268,8 @@ def plot_performance_combined(all_results):
 
 
 def save_loso_table(all_results):
-    """Save a LOSO performance table broken down by site for all outcomes."""
+    """Save a LOSO performance table broken down by site for all outcomes.
+    Uses time-specific metrics evaluated at t=EVAL_TIME_YEARS."""
     h = 0.5
     outcome_labels = {'any_narcolepsy': 'Any Narcolepsy (NT1 + NT2/IH)',
                       'nt1': 'NT1 Only', 'nt2ih': 'NT2/IH Only'}
@@ -1093,29 +1278,33 @@ def save_loso_table(all_results):
     rows = []
     for outcome in outcomes:
         results = all_results[outcome]
-        perf = results[h]['loso']['perf']
-        for _, row in perf.iterrows():
+        time_perf = results[h]['loso']['time_perf']
+        perf = results[h]['loso']['perf']  # for N_cases/N_controls
+        for _, tp_row in time_perf.iterrows():
+            site = tp_row['site']
+            # Get case/control counts from original perf (same patients)
+            orig_row = perf[perf['site'] == site].iloc[0]
             rows.append({
                 'Outcome': outcome_labels[outcome],
-                'Site': row['site'].upper(),
-                'AUC': f"{row['AUC']:.3f}",
-                'AUPRC': f"{row['AUPRC']:.3f}",
-                'N_cases': int(row['N_diag']),
-                'N_controls': int(row['N_ctrl']),
+                'Site': site.upper(),
+                'AUC': f"{tp_row['AUC']:.3f}",
+                'AUPRC': f"{tp_row['AUPRC']:.3f}",
+                'N_cases': int(orig_row['N_diag']),
+                'N_controls': int(orig_row['N_ctrl']),
             })
         # Add mean row
         rows.append({
             'Outcome': outcome_labels[outcome],
             'Site': 'Mean',
-            'AUC': f"{perf['AUC'].mean():.3f}",
-            'AUPRC': f"{perf['AUPRC'].mean():.3f}",
+            'AUC': f"{time_perf['AUC'].mean():.3f}",
+            'AUPRC': f"{time_perf['AUPRC'].mean():.3f}",
             'N_cases': int(perf['N_diag'].sum()),
             'N_controls': int(perf['N_ctrl'].sum()),
         })
 
     table = pd.DataFrame(rows)
     table.to_csv('v2_loso_by_site.csv', index=False)
-    print("\nLOSO results by site:")
+    print(f"\nLOSO results by site (at t={EVAL_TIME_YEARS}yr):")
     print(table.to_string(index=False))
     print("Saved: v2_loso_by_site.csv")
     return table
@@ -1306,16 +1495,17 @@ def run_one_outcome(df_all, feat_names, pat_info, outcome):
     # Score full test dataset [-5yr, 0yr] with final model
     df_test = prepare_dataset(df_all, pat_info, outcome,
                               horizon_years=0, max_years=MAX_YEARS_BEFORE_DIAG_TEST)
-    ft_scores, ft_sids, ft_y, ft_T = score_with_final_model(
+    ft_scores, ft_sids, ft_y, ft_T, ft_raw = score_with_final_model(
         df_test, feat_names, final_artifacts)
     results[h]['pooled']['traj_scores'] = ft_scores
     results[h]['pooled']['traj_sids'] = ft_sids
     results[h]['pooled']['traj_y'] = ft_y
     results[h]['pooled']['traj_T'] = ft_T
+    results[h]['pooled']['traj_raw_scores'] = ft_raw
 
     # Resubstitution: final model evaluated on training data
     print("\n  --- Resubstitution (final model on training data) ---")
-    resub_scores, resub_sids, resub_y, resub_T = score_with_final_model(
+    resub_scores, resub_sids, resub_y, resub_T, _ = score_with_final_model(
         df_train, feat_names, final_artifacts)
     resub_df = pd.DataFrame({'sid': resub_sids, 'score': resub_scores, 'y': resub_y})
     resub_pat = resub_df.groupby('sid').agg(
@@ -1331,6 +1521,55 @@ def run_one_outcome(df_all, feat_names, pat_info, outcome):
         }]),
     }
 
+    # --- Time-specific AUC at t=EVAL_TIME_YEARS (for eFigure 9) ---
+    print(f"\n  --- Time-specific evaluation at t={EVAL_TIME_YEARS}yr "
+          f"(window={EVAL_WINDOW_YEARS}yr) ---")
+
+    # 5-fold CV: per-fold time-specific AUC
+    cv_time_rows = []
+    for fold_i in range(5):
+        fold_mask = np.array([fold_map.get(s) == fold_i for s in sids])
+        met = compute_time_specific_metrics(
+            scores[fold_mask], sids[fold_mask], y[fold_mask], T[fold_mask],
+            pat_info)
+        met['fold'] = fold_i
+        cv_time_rows.append(met)
+        print(f"    5-fold CV fold {fold_i}: AUC={met['AUC']:.3f}  "
+              f"AUPRC={met['AUPRC']:.3f}  ({met['N_diag']} cases)")
+    cv_time_perf = pd.DataFrame(cv_time_rows)
+    results[h]['pooled']['time_perf'] = cv_time_perf
+    print(f"    ** 5-fold CV mean at t={EVAL_TIME_YEARS}yr: "
+          f"AUC={cv_time_perf['AUC'].mean():.3f}  "
+          f"AUPRC={cv_time_perf['AUPRC'].mean():.3f} **")
+
+    # LOSO: per-site time-specific AUC
+    sites_arr = df_train['site'].values
+    loso_time_rows = []
+    for site in sorted(df_train['site'].unique()):
+        site_mask = (sites_arr == site) & ~np.isnan(scores_l)
+        if site_mask.sum() == 0:
+            continue
+        met = compute_time_specific_metrics(
+            scores_l[site_mask], sids_l[site_mask], y_l[site_mask],
+            T_l[site_mask], pat_info)
+        met['site'] = site
+        loso_time_rows.append(met)
+        print(f"    LOSO {site}: AUC={met['AUC']:.3f}  "
+              f"AUPRC={met['AUPRC']:.3f}  ({met['N_diag']} cases)")
+    loso_time_perf = pd.DataFrame(loso_time_rows)
+    results[h]['loso']['time_perf'] = loso_time_perf
+    print(f"    ** LOSO mean at t={EVAL_TIME_YEARS}yr: "
+          f"AUC={loso_time_perf['AUC'].mean():.3f}  "
+          f"AUPRC={loso_time_perf['AUPRC'].mean():.3f} **")
+
+    # Resubstitution: time-specific AUC (final model on full window)
+    resub_time_met = compute_time_specific_metrics(
+        ft_scores, ft_sids, ft_y, ft_T, pat_info)
+    results[h]['resubstitution']['time_perf'] = pd.DataFrame([resub_time_met])
+    print(f"    Resub at t={EVAL_TIME_YEARS}yr: "
+          f"AUC={resub_time_met['AUC']:.3f}  "
+          f"AUPRC={resub_time_met['AUPRC']:.3f}")
+
     # Save results WITH final model artifacts
     save_data = {
         'results': results,
@@ -1342,18 +1581,20 @@ def run_one_outcome(df_all, feat_names, pat_info, outcome):
         pickle.dump(save_data, f)
     print(f"  Saved results + final model: v2_results_{outcome}.pickle")
 
-    # Summary table
+    # Summary table (time-specific metrics for primary reporting)
     print(f"\n\n{'=' * 60}")
     print(f"  SUMMARY: {outcome_label}")
+    print(f"  (AUC evaluated at t={EVAL_TIME_YEARS}yr)")
     print(f"{'=' * 60}")
     rows = []
     for cv_type in ['pooled', 'loso', 'resubstitution']:
+        tp = results[h][cv_type]['time_perf']
         p = results[h][cv_type]['perf']
         n_cases = int(p['N_diag'].sum())
         rows.append({
             'Horizon': h, 'CV': cv_type,
-            'Mean AUC': f"{p['AUC'].mean():.3f}",
-            'Mean AUPRC': f"{p['AUPRC'].mean():.3f}",
+            'Mean AUC': f"{tp['AUC'].mean():.3f}",
+            'Mean AUPRC': f"{tp['AUPRC'].mean():.3f}",
             'N cases': n_cases,
         })
     summary = pd.DataFrame(rows)
@@ -1364,14 +1605,21 @@ def run_one_outcome(df_all, feat_names, pat_info, outcome):
 
 
 def main():
+    global FEATURE_TRANSFORM
     if len(sys.argv) < 2:
-        print("Usage: python risk_score_v2.py <any_narcolepsy|nt1|nt2ih|both|all>")
+        print("Usage: python risk_score_v2.py <any_narcolepsy|nt1|nt2ih|both|all> [cumulative|running_mean|running_max]")
         sys.exit(1)
 
     outcome = sys.argv[1].strip().lower()
     valid = ['any_narcolepsy', 'nt1', 'nt2ih', 'both', 'all']
     assert outcome in valid, \
         f"outcome must be one of {valid}, got '{outcome}'"
+
+    if len(sys.argv) >= 3:
+        FEATURE_TRANSFORM = sys.argv[2].strip().lower()
+        assert FEATURE_TRANSFORM in ('cumulative', 'running_mean', 'running_max'), \
+            f"transform must be cumulative, running_mean, or running_max"
+    print(f"Feature transform: {FEATURE_TRANSFORM}")
 
     # Load all data once
     df_all, feat_names, pat_info = load_all_data()

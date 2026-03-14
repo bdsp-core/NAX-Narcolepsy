@@ -89,8 +89,8 @@ Computes a longitudinal risk score from clinical notes written **before** a narc
 ### Data
 
 - **Source**: BDSP (5 academic medical centers: BCH, BIDMC, Emory, MGH, Stanford)
-- **Cohort**: 191 any-narcolepsy training cases (72 NT1, 119 NT2/IH), 8,480 controls (BIDMC and MGH general population)
-- **Features**: Same 924 NLP features as the discriminative models, extracted per visit
+- **Cohort**: 181 any-narcolepsy training cases (68 NT1, 113 NT2/IH), 9,858 controls (BIDMC and MGH general population)
+- **Features**: Same NLP features as the discriminative models, transformed to running means (cumulative count / number of visits) to normalize for visit frequency
 
 ### Method
 
@@ -103,11 +103,13 @@ Computes a longitudinal risk score from clinical notes written **before** a narc
 
 ### Results
 
+AUC evaluated at t = −1.5 years relative to diagnosis (1-year window):
+
 | Outcome | 5-fold CV AUC | LOSO AUC | Training Cases |
 |---------|---------------|----------|----------------|
-| Any Narcolepsy (NT1 + NT2/IH) | 0.842 | 0.822 | 191 |
-| NT1 Only | 0.780 | 0.763 | 72 |
-| NT2/IH Only | 0.818 | 0.726 | 119 |
+| Any Narcolepsy (NT1 + NT2/IH) | 0.788 | 0.739 | 181 |
+| NT1 Only | 0.798 | 0.722 | 68 |
+| NT2/IH Only | 0.757 | 0.630 | 113 |
 
 ### Running
 

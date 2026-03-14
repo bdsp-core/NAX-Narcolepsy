@@ -18,6 +18,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score
+from scipy.optimize import curve_fit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pub_style import (apply_style, savefig as pub_savefig, add_panel_label,
@@ -41,6 +42,12 @@ OUTCOME_LABELS = {
 PANEL_LABELS = ['A', 'B', 'C', 'D', 'E', 'F']
 
 MAX_YEARS = 5.0
+
+
+def _logit(p, eps=1e-3):
+    """Logit transform with clipping to avoid infinities."""
+    p_clip = np.clip(p, eps, 1.0 - eps)
+    return np.log(p_clip / (1.0 - p_clip))
 
 
 def _derive_site(patient_id):
@@ -93,6 +100,7 @@ def _sliding_window_auc_vs_flat_ctrl(case_t, case_scores, case_sids,
     """Time-varying AUROC: case scores per window vs all control patient means."""
     t_centers = np.arange(-MAX_YEARS + window / 2, 0.0 + step, step)
     auc_vals = np.full(len(t_centers), np.nan)
+    n_cases = np.full(len(t_centers), 0)
 
     for i, tc in enumerate(t_centers):
         mask = (case_t >= tc - window / 2) & (case_t < tc + window / 2)
@@ -100,6 +108,7 @@ def _sliding_window_auc_vs_flat_ctrl(case_t, case_scores, case_sids,
             continue
         df_win = pd.DataFrame({'sid': case_sids[mask], 'score': case_scores[mask]})
         case_pat = df_win.groupby('sid')['score'].mean().values
+        n_cases[i] = len(case_pat)
         if len(case_pat) < min_cases:
             continue
         all_scores = np.concatenate([case_pat, ctrl_pat_scores])
@@ -109,7 +118,33 @@ def _sliding_window_auc_vs_flat_ctrl(case_t, case_scores, case_sids,
             continue
         auc_vals[i] = roc_auc_score(all_labels, all_scores)
 
-    return t_centers, auc_vals
+    return t_centers, auc_vals, n_cases
+
+
+def _sigmoid(t, L, U, k, t0):
+    """Sigmoid: L + (U-L) / (1 + exp(-k*(t-t0)))."""
+    return L + (U - L) / (1.0 + np.exp(-k * (t - t0)))
+
+
+def _fit_sigmoid_auroc(t_centers, auc_vals, n_cases):
+    """Fit a sigmoid to empirical AUROC values. Returns (t_fine, auroc_fit) or None."""
+    valid = ~np.isnan(auc_vals)
+    if valid.sum() < 4:
+        return None
+    t_obs = t_centers[valid]
+    y_obs = auc_vals[valid]
+    w_obs = n_cases[valid]
+    t_fine = np.linspace(-5.0, 0.0, 300)
+    try:
+        popt, _ = curve_fit(
+            _sigmoid, t_obs, y_obs,
+            p0=[0.7, 0.95, 1.5, -2.5],
+            bounds=([0.5, 0.7, 0.1, -5.0], [0.9, 1.0, 10.0, 0.0]),
+            sigma=1.0 / np.sqrt(np.clip(w_obs, 1, None)),
+            maxfev=10000)
+        return t_fine, _sigmoid(t_fine, *popt)
+    except Exception:
+        return None
 
 
 def main():
@@ -132,11 +167,15 @@ def main():
 
         sids_arr = r.get('traj_sids', r['sids'])
         scores = r.get('traj_scores', r['scores'])
+        raw_scores = r.get('traj_raw_scores')
         y_arr = r.get('traj_y', r['y'])
         T_arr = r.get('traj_T', r['T'])
 
         dtmp = pd.DataFrame({'sid': sids_arr, 'score': scores, 'y': y_arr, 'T': T_arr})
+        if raw_scores is not None:
+            dtmp['raw_score'] = raw_scores
         dtmp = dtmp.dropna(subset=['score'])
+        has_raw = 'raw_score' in dtmp.columns
         dtmp['site'] = dtmp['sid'].apply(_derive_site)
 
         pat_label = dtmp.groupby('sid')['y'].max()
@@ -155,14 +194,20 @@ def main():
             for _, row in sub.iterrows():
                 t_rel = row['T'] - diag_t_yr
                 if -MAX_YEARS - 0.1 <= t_rel <= 0.1:
-                    case_rows.append({
+                    r_dict = {
                         't_rel': t_rel, 'score': row['score'],
                         'sid': sid, 'site': site
-                    })
+                    }
+                    if has_raw:
+                        r_dict['raw_score'] = row['raw_score']
+                    case_rows.append(r_dict)
         case_df = pd.DataFrame(case_rows)
 
         # Controls: patient-level means (pooled BIDMC + MGH)
-        ctrl_scores = dtmp[dtmp['y'] == 0].groupby('sid')['score'].mean().values
+        ctrl_df = dtmp[dtmp['y'] == 0]
+        ctrl_scores = ctrl_df.groupby('sid')['score'].mean().values
+        ctrl_raw_scores = (ctrl_df.groupby('sid')['raw_score'].mean().values
+                           if has_raw else None)
         n_ctrl = len(ctrl_scores)
         ctrl_mean = np.mean(ctrl_scores)
         rng_boot = np.random.RandomState(42)
@@ -176,10 +221,15 @@ def main():
         ax_traj = axes[0, col]
         ax_auc = axes[1, col]
 
+        # Logit-scale tick positions
+        prob_ticks = [0.1, 0.2, 0.5, 0.8, 0.9, 0.95, 0.99]
+        logit_ticks = [_logit(p) for p in prob_ticks]
+
         # Plot control band
-        ax_traj.axhspan(ctrl_ci_lo, ctrl_ci_hi, color=CTRL_COLOR, alpha=0.12)
-        ax_traj.axhline(ctrl_mean, color=CTRL_COLOR, lw=LINE_WIDTH, ls='--',
-                         alpha=0.7)
+        ax_traj.axhspan(_logit(ctrl_ci_lo), _logit(ctrl_ci_hi),
+                         color=CTRL_COLOR, alpha=0.12)
+        ax_traj.axhline(_logit(ctrl_mean), color=CTRL_COLOR, lw=LINE_WIDTH,
+                         ls='--', alpha=0.7)
 
         # Plot each site's case trajectory
         sites_present = sorted(case_df['site'].unique(),
@@ -201,14 +251,16 @@ def main():
             if valid.sum() == 0:
                 continue
 
-            ax_traj.plot(tc[valid], mu[valid], color=color, lw=LINE_WIDTH_THICK,
-                          label=f'{site} (n={n_site})')
-            ax_traj.fill_between(tc[valid], lo[valid], hi[valid],
-                                  color=color, alpha=0.10)
+            ax_traj.plot(tc[valid], _logit(mu[valid]), color=color,
+                          lw=LINE_WIDTH_THICK, label=f'{site} (n={n_site})')
+            ax_traj.fill_between(tc[valid], _logit(lo[valid]),
+                                  _logit(hi[valid]), color=color, alpha=0.10)
 
-            # AUROC per site
-            tc_a, auc = _sliding_window_auc_vs_flat_ctrl(
-                t_rel, vals, sids, ctrl_scores,
+            # AUROC per site (use raw decision_function scores if available)
+            auc_vals_site = (site_df['raw_score'].values if has_raw else vals)
+            auc_ctrl = ctrl_raw_scores if has_raw else ctrl_scores
+            tc_a, auc, nc_a = _sliding_window_auc_vs_flat_ctrl(
+                t_rel, auc_vals_site, sids, auc_ctrl,
                 window=1.0, step=0.1, min_cases=5)
             valid_a = ~np.isnan(auc)
             if valid_a.sum() > 0:
@@ -216,19 +268,21 @@ def main():
                              lw=LINE_WIDTH)
 
         # Control label
-        ax_traj.text(-4.9, ctrl_mean + 0.03,
+        ax_traj.text(-4.9, _logit(ctrl_mean) + 0.15,
                      f'Controls (n={n_ctrl})',
                      fontsize=FONT_SIZE_ANNOTATION, color=CTRL_COLOR,
                      va='bottom')
 
-        # Formatting - trajectories
-        ax_traj.set_ylim(-0.02, 1.05)
+        # Formatting - trajectories (logit scale)
+        ax_traj.set_ylim(_logit(0.08), _logit(0.995))
+        ax_traj.set_yticks(logit_ticks)
+        ax_traj.set_yticklabels([f'{p:.0%}' for p in prob_ticks])
         ax_traj.set_ylabel('Risk score' if col == 0 else '')
         ax_traj.set_title(OUTCOME_LABELS[outcome])
         ax_traj.legend(loc='upper left', fontsize=FONT_SIZE_LEGEND - 1,
                         frameon=False)
-        for yv in [0.2, 0.4, 0.6, 0.8]:
-            ax_traj.axhline(yv, color='gray', lw=0.4, alpha=0.25)
+        for yv in prob_ticks:
+            ax_traj.axhline(_logit(yv), color='gray', lw=0.4, alpha=0.25)
         add_panel_label(ax_traj, PANEL_LABELS[col])
 
         # Formatting - AUROC

@@ -52,7 +52,7 @@ Labels come from the `annot` column in `notes.parquet`.
 
 ## Pipeline 2: Longitudinal Prediction
 
-### Feature Extraction (visit-level → longitudinal cumulative)
+### Feature Extraction (visit-level → longitudinal running mean)
 ```
 Input:  data/discriminative-modeling/features.parquet
         data/discriminative-modeling/predictive_annotation.parquet
@@ -61,7 +61,11 @@ Output: predictive-modeling/features_update/nt1/features_3.parquet
         predictive-modeling/features_update/nt2ih/features_3.parquet
 ```
 
-Visit-level features are aggregated into cumulative counts per patient-visit.
+Visit-level features are aggregated into cumulative counts per patient-visit,
+then normalized to running means (cumulative count / number of visits) to
+control for differences in visit frequency across patients. This prevents
+patients with many notes from receiving artificially inflated risk scores
+simply due to higher documentation volume.
 The `n+_state` column marks pre- vs. post-diagnosis visits. Diagnosis dates
 come from `predictive_annotation.parquet`.
 
@@ -76,9 +80,12 @@ Output: predictive-modeling/risk_score_v2/v2_results_*.pickle
 Three outcome models: any_narcolepsy, NT1, NT2/IH.
 
 SGDClassifier with L1 penalty, balanced minibatches, chi-squared feature
-selection (top 100). 5-fold stratified CV (primary) + LOSO CV (secondary,
-restricted to BIDMC and MGH with ≥50 controls). Training window: [-2.5, -0.5]
-years before diagnosis. Testing/scoring window: [-5, 0] years.
+selection (top 100), running mean feature normalization. 5-fold stratified CV
+(primary) + LOSO CV (secondary, restricted to BIDMC and MGH with ≥50
+controls). Training window: [-2.5, -0.5] years before diagnosis.
+Testing/scoring window: [-5, 0] years. Discrimination metrics (AUC, AUPRC)
+are evaluated at t = -1.5 years relative to diagnosis (1-year window),
+providing a time-specific assessment of model performance.
 
 ## Figure Generation
 ```

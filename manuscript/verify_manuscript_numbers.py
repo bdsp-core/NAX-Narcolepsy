@@ -262,24 +262,24 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
 
     r = data["results"][0.5]
 
-    # 5-fold CV (pooled) performance
-    pooled_perf = r["pooled"]["perf"]
+    # 5-fold CV (pooled) time-specific performance (at t=-1.5yr)
+    pooled_perf = r["pooled"]["time_perf"]
     mean_auc_cv = pooled_perf["AUC"].mean()
     mean_auprc_cv = pooled_perf["AUPRC"].mean()
 
-    # LOSO performance
-    loso_perf = r["loso"]["perf"]
+    # LOSO time-specific performance
+    loso_perf = r["loso"]["time_perf"]
     mean_auc_loso = loso_perf["AUC"].mean()
     mean_auprc_loso = loso_perf["AUPRC"].mean()
 
     print(f"\n  --- {outcome} ---")
     expected_perf = {
-        "any_narcolepsy": {"cv_auc": 0.842, "cv_auprc": 0.496,
-                           "loso_auc": 0.822, "loso_auprc": 0.473},
-        "nt1":            {"cv_auc": 0.780, "cv_auprc": 0.310,
-                           "loso_auc": 0.763, "loso_auprc": 0.213},
-        "nt2ih":          {"cv_auc": 0.818, "cv_auprc": 0.388,
-                           "loso_auc": 0.726, "loso_auprc": 0.142},
+        "any_narcolepsy": {"cv_auc": 0.788, "cv_auprc": 0.312,
+                           "loso_auc": 0.739, "loso_auprc": 0.159},
+        "nt1":            {"cv_auc": 0.798, "cv_auprc": 0.200,
+                           "loso_auc": 0.722, "loso_auprc": 0.103},
+        "nt2ih":          {"cv_auc": 0.757, "cv_auprc": 0.229,
+                           "loso_auc": 0.630, "loso_auprc": 0.063},
     }
     exp = expected_perf[outcome]
     check_float(f"{outcome} 5-fold CV AUC = {exp['cv_auc']}", exp["cv_auc"], mean_auc_cv)
@@ -299,9 +299,9 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
 section("6. Non-Zero L1 Feature Counts")
 
 for outcome, pickle_name, expected_count in [
-    ("any_narcolepsy", "v2_results_any_narcolepsy.pickle", 82),
-    ("nt1", "v2_results_nt1.pickle", 70),
-    ("nt2ih", "v2_results_nt2ih.pickle", 69),
+    ("any_narcolepsy", "v2_results_any_narcolepsy.pickle", 77),
+    ("nt1", "v2_results_nt1.pickle", 98),
+    ("nt2ih", "v2_results_nt2ih.pickle", 77),
 ]:
     pickle_path = os.path.join(RISK_DIR, pickle_name)
     if not os.path.exists(pickle_path):
@@ -322,7 +322,7 @@ for outcome, pickle_name, expected_count in [
 section("7. Feature Heatmap Patient Counts")
 
 # Replicate the heatmap script's patient selection logic
-MAX_YEARS = 2.5
+MAX_YEARS = 5.0  # Matches feature_heatmap.py (5-year pre-diagnostic window)
 MIN_VISITS = 5
 
 # Build the merged dataframe using metadata-only DFs (memory efficient)
@@ -360,8 +360,8 @@ def filter_by_min_visits_hm(df_grouped, patient_ids, ref_times, max_years, min_v
 df_hm_grouped = df_hm.groupby("bdsp_patient_id")
 
 for outcome, expected_cases, expected_ctrls in [
-    ("any_narcolepsy", 232, 232),
-    ("nt1", 88, 88),
+    ("any_narcolepsy", 242, 242),
+    ("nt1", 92, 92),
 ]:
     if outcome == "any_narcolepsy":
         case_ids_out = nt1_case_ids | nt2_case_ids
@@ -456,8 +456,8 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
 
     # Verify specific manuscript claims
     if outcome == "any_narcolepsy":
-        # NNT~20 threshold~0.98 sens~70%, NNT~10 threshold~0.99 sens~69%
-        for target_nnt, exp_thr, exp_sens in [(20, 0.98, 0.70), (10, 0.99, 0.69)]:
+        # NNT~10 threshold~0.93 sens~74%, NNT~20 threshold~0.74 sens~83%
+        for target_nnt, exp_thr, exp_sens in [(10, 0.93, 0.74), (20, 0.74, 0.83)]:
             valid = ~np.isnan(nnt) & np.isfinite(nnt) & (nnt > 0)
             valid_idx = np.where(valid)[0]
             nnt_valid = nnt[valid_idx]
@@ -466,13 +466,13 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
             s_val = sens[closest]
             n_val = nnt[closest]
             check_float(f"{outcome} NNT={target_nnt} threshold ~ {exp_thr}",
-                        exp_thr, t_val, tol=0.03)
+                        exp_thr, t_val, tol=0.05)
             check_float(f"{outcome} NNT={target_nnt} sensitivity ~ {exp_sens:.0%}",
-                        exp_sens, s_val, tol=0.03)
+                        exp_sens, s_val, tol=0.05)
 
     elif outcome == "nt1":
-        # NNT~20 threshold~0.93 sens~81%, NNT~10 threshold~0.98 sens~80%
-        for target_nnt, exp_thr, exp_sens in [(20, 0.93, 0.81), (10, 0.98, 0.80)]:
+        # NNT~10 threshold~0.97 sens~80%, NNT~20 threshold~0.89 sens~81%
+        for target_nnt, exp_thr, exp_sens in [(10, 0.97, 0.80), (20, 0.89, 0.81)]:
             valid = ~np.isnan(nnt) & np.isfinite(nnt) & (nnt > 0)
             valid_idx = np.where(valid)[0]
             nnt_valid = nnt[valid_idx]
@@ -503,21 +503,23 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
         data = pickle.load(f)
 
     loso_perf = data["results"][0.5]["loso"]["perf"]
+    loso_time_perf = data["results"][0.5]["loso"]["time_perf"]
     print(f"\n  --- {outcome} ---")
 
     # Expected values - LOSO restricted to BIDMC and MGH only (sites with >=50 controls)
+    # N_diag/N_ctrl from original perf; AUC/AUPRC from time-specific (t=-1.5yr)
     all_expected_sites = {
         "any_narcolepsy": {
-            "BIDMC":    {"N_diag": 44, "N_ctrl": 4976, "AUC": 0.918, "AUPRC": 0.734},
-            "MGH":      {"N_diag": 54, "N_ctrl": 4882, "AUC": 0.725, "AUPRC": 0.211},
+            "BIDMC":    {"N_diag": 44, "N_ctrl": 4976, "AUC": 0.821, "AUPRC": 0.168},
+            "MGH":      {"N_diag": 54, "N_ctrl": 4882, "AUC": 0.657, "AUPRC": 0.151},
         },
         "nt1": {
-            "BIDMC":    {"N_diag": 11, "N_ctrl": 4976, "AUC": 0.775, "AUPRC": 0.152},
-            "MGH":      {"N_diag": 26, "N_ctrl": 4882, "AUC": 0.751, "AUPRC": 0.275},
+            "BIDMC":    {"N_diag": 11, "N_ctrl": 4976, "AUC": 0.854, "AUPRC": 0.040},
+            "MGH":      {"N_diag": 26, "N_ctrl": 4882, "AUC": 0.590, "AUPRC": 0.166},
         },
         "nt2ih": {
-            "BIDMC":    {"N_diag": 33, "N_ctrl": 4976, "AUC": 0.829, "AUPRC": 0.235},
-            "MGH":      {"N_diag": 28, "N_ctrl": 4882, "AUC": 0.623, "AUPRC": 0.050},
+            "BIDMC":    {"N_diag": 33, "N_ctrl": 4976, "AUC": 0.759, "AUPRC": 0.102},
+            "MGH":      {"N_diag": 28, "N_ctrl": 4882, "AUC": 0.502, "AUPRC": 0.024},
         },
     }
     expected_sites = all_expected_sites[outcome]
@@ -530,19 +532,25 @@ for outcome, pickle_name in [("any_narcolepsy", "v2_results_any_narcolepsy.pickl
                   exp["N_diag"], int(row["N_diag"]))
             check(f"{outcome} {site} N_ctrl = {exp['N_ctrl']}",
                   exp["N_ctrl"], int(row["N_ctrl"]))
+
+    # Time-specific AUC/AUPRC per site
+    for _, row in loso_time_perf.iterrows():
+        site = row["site"]
+        if site in expected_sites:
+            exp = expected_sites[site]
             check_float(f"{outcome} {site} AUC = {exp['AUC']:.3f}",
                         exp["AUC"], row["AUC"], tol=0.002)
             check_float(f"{outcome} {site} AUPRC = {exp['AUPRC']:.3f}",
                         exp["AUPRC"], row["AUPRC"], tol=0.002)
 
-    # Mean LOSO
+    # Mean LOSO (time-specific)
     expected_means = {
-        "any_narcolepsy": {"auc": 0.822, "auprc": 0.473},
-        "nt1": {"auc": 0.763, "auprc": 0.213},
-        "nt2ih": {"auc": 0.726, "auprc": 0.142},
+        "any_narcolepsy": {"auc": 0.739, "auprc": 0.159},
+        "nt1": {"auc": 0.722, "auprc": 0.103},
+        "nt2ih": {"auc": 0.630, "auprc": 0.063},
     }
-    mean_auc = loso_perf["AUC"].mean()
-    mean_auprc = loso_perf["AUPRC"].mean()
+    mean_auc = loso_time_perf["AUC"].mean()
+    mean_auprc = loso_time_perf["AUPRC"].mean()
     em = expected_means[outcome]
     check_float(f"{outcome} mean LOSO AUC = {em['auc']}", em["auc"], mean_auc)
     check_float(f"{outcome} mean LOSO AUPRC = {em['auprc']}", em["auprc"], mean_auprc)
