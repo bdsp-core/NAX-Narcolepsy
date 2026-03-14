@@ -243,3 +243,9 @@ longitudinal-time-to-event-model/results.pickle
 
 # Figure review reports (generated, not tracked)
 figure_review/reports/
+
+# Generated manuscript figures (output lives in Nax-Narcolepsy-manuscript repo)
+manuscript/figures/
+
+# Manuscript review reports
+manuscript/review_reports/

@@ -10,7 +10,7 @@
 #   2       - Risk score trajectories       (predictive-modeling/risk_score_v2/risk_score_v2.py)
 #   3       - NNT analysis                  (predictive-modeling/risk_score_v2/risk_score_v2.py)
 #
-# Supplementary figures (15):
+# Supplementary figures (16):
 #   eFig 1  - CONSORT cross-sectional       (paper_figures/consort_diagrams.py)
 #   eFig 2  - CONSORT longitudinal          (paper_figures/consort_diagrams.py)
 #   eFig 3  - ROC & PRC NT1 (all models)    (paper_figures/roc_prc.ipynb)
@@ -24,7 +24,9 @@
 #   eFig 11 - Top predictive features       (predictive-modeling/risk_score_v2/risk_score_v2.py)
 #   eFig 12 - Feature heatmap (any narco)   (paper_figures/feature_heatmap.py)
 #   eFig 13 - Feature heatmap (NT1)         (paper_figures/feature_heatmap.py)
-#   eFig 14 - Swimmer plot                  (paper_figures/swimmer_plot.py)
+#   eFig 14 - Feature heatmap (NT2/IH)      (paper_figures/feature_heatmap.py)
+#   eFig 15 - Swimmer plot                  (paper_figures/swimmer_plot.py)
+#   eFig 16 - Site-stratified trajectories  (paper_figures/site_trajectories.py)
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -53,15 +55,21 @@ python3 risk_score_v2.py all
 cd ../..
 
 echo ""
-echo "=== 5. Feature evolution heatmaps (eFigures 12, 13) ==="
+echo "=== 5. Feature evolution heatmaps (eFigures 12, 13, 14) ==="
 cd paper_figures
 python3 feature_heatmap.py
 cd ..
 
 echo ""
-echo "=== 6. Swimmer plot (eFigure 14) ==="
+echo "=== 6. Swimmer plot (eFigure 15) ==="
 cd paper_figures
 python3 swimmer_plot.py
+cd ..
+
+echo ""
+echo "=== 7. Site-stratified trajectories (eFigure 16) ==="
+cd paper_figures
+python3 site_trajectories.py
 cd ..
 
 echo ""

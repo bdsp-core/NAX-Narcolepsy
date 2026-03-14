@@ -59,7 +59,7 @@ def _derive_site(patient_id):
     s = str(patient_id)
     if s.startswith(('111', '112', '113', '114', '115',
                      '116', '117', '118', '119', '120', '121', '122')):
-        return 'MGB'
+        return 'MGH'
     elif s.startswith(('150', '151')):
         return 'BIDMC'
     elif s.startswith('175'):
@@ -73,9 +73,12 @@ def _derive_site(patient_id):
 
 def load_all_data():
     """
-    Load NT1 and NT2/IH parquets (cases, negatives, and controls).
-    Non-case patients from both disease parquets serve as controls,
-    giving every site adequate controls for LOSO analysis.
+    Load NT1 and NT2/IH case parquets (n+) and general-population controls.
+    Controls are drawn from the general hospital population (BIDMC and MGH),
+    NOT from the enriched discriminative-modeling cohort (n- files).
+    The n- files contain sleep-clinic patients selected via ICD/medication
+    criteria for cross-sectional classification and are not representative
+    of the general population against which we want to screen.
     Returns: df, feat_names, pat_info dict
     """
     base = os.path.dirname(os.path.abspath(__file__))
@@ -84,42 +87,39 @@ def load_all_data():
     print("Loading all data...")
 
     def _load_task(task_dir, task_label):
-        """Load n+, n-, and controls parquets for a task; return cases and noncases."""
+        """Load n+ and controls parquets for a task; return cases and controls."""
         task_path = os.path.join(feat_base, task_dir)
         df_pos = pd.read_parquet(os.path.join(task_path, 'n+_features_3.parquet'))
-        df_neg = pd.read_parquet(os.path.join(task_path, 'n-_features_3.parquet'))
         df_ctrl = pd.read_parquet(os.path.join(task_path, 'controls_features_3.parquet'))
 
         # Rename 'id' -> 'bdsp_patient_id' for consistency with downstream code
-        for df_part in [df_pos, df_neg, df_ctrl]:
+        for df_part in [df_pos, df_ctrl]:
             if 'id' in df_part.columns and 'bdsp_patient_id' not in df_part.columns:
                 df_part.rename(columns={'id': 'bdsp_patient_id'}, inplace=True)
 
         # Derive site from patient ID
-        for df_part in [df_pos, df_neg, df_ctrl]:
+        for df_part in [df_pos, df_ctrl]:
             if 'site' not in df_part.columns:
                 df_part['site'] = df_part['bdsp_patient_id'].apply(_derive_site)
 
         # Drop metadata columns not needed downstream
         drop_cols = ['date', 'num_visits_since_first_visit', 'filename', 'cohort']
-        for df_part in [df_pos, df_neg, df_ctrl]:
+        for df_part in [df_pos, df_ctrl]:
             df_part.drop(columns=[c for c in drop_cols if c in df_part.columns],
                          inplace=True, errors='ignore')
 
         df_pos['case_type'] = task_label
-        df_neg['case_type'] = 'control'
         df_ctrl['case_type'] = 'control'
 
         case_ids = set(df_pos['bdsp_patient_id'].unique())
-        noncase_ids = set(df_neg['bdsp_patient_id'].unique()) | set(df_ctrl['bdsp_patient_id'].unique())
+        ctrl_ids = set(df_ctrl['bdsp_patient_id'].unique())
         print(f"  {task_label} parquets: {len(case_ids)} cases, "
-              f"{len(noncase_ids)} non-cases ({df_neg['bdsp_patient_id'].nunique()} neg + "
-              f"{df_ctrl['bdsp_patient_id'].nunique()} ctrl)")
-        return df_pos, pd.concat([df_neg, df_ctrl], ignore_index=True)
+              f"{len(ctrl_ids)} controls")
+        return df_pos, df_ctrl
 
-    df_nt1_cases, df_nt1_noncases = _load_task('nt1', 'nt1')
+    df_nt1_cases, df_nt1_ctrls = _load_task('nt1', 'nt1')
     nt1_case_ids = set(df_nt1_cases['bdsp_patient_id'].unique())
-    df_nt2_cases, df_nt2_noncases = _load_task('nt2ih', 'nt2ih')
+    df_nt2_cases, df_nt2_ctrls = _load_task('nt2ih', 'nt2ih')
     nt2_case_ids = set(df_nt2_cases['bdsp_patient_id'].unique())
 
     # --- Align feature columns ---
@@ -128,8 +128,8 @@ def load_all_data():
                  'case_type', 'filename'}
     feat_cols = sorted(set(df_nt1_cases.columns) - meta_cols)
     for name, df_check in [('NT2/IH cases', df_nt2_cases),
-                           ('NT1 noncases', df_nt1_noncases),
-                           ('NT2/IH noncases', df_nt2_noncases)]:
+                           ('NT1 controls', df_nt1_ctrls),
+                           ('NT2/IH controls', df_nt2_ctrls)]:
         missing = set(feat_cols) - set(df_check.columns)
         if missing:
             print(f"  Warning: {len(missing)} features missing from {name}")
@@ -139,7 +139,7 @@ def load_all_data():
                  'days_since_first_visit', 'case_type'] + feat_cols
 
     dfs = []
-    for df_part in [df_nt1_cases, df_nt1_noncases, df_nt2_cases, df_nt2_noncases]:
+    for df_part in [df_nt1_cases, df_nt1_ctrls, df_nt2_cases, df_nt2_ctrls]:
         cols = [c for c in keep_cols if c in df_part.columns]
         dfs.append(df_part[cols])
     df = pd.concat(dfs, axis=0, ignore_index=True)

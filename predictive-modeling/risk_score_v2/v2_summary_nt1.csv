@@ -1,4 +1,4 @@
 Horizon,CV,Mean AUC,Mean AUPRC,N cases
-0.5,pooled,0.839,0.401,68
-0.5,loso,0.730,0.229,37
-0.5,resubstitution,0.917,0.315,68
+0.5,pooled,0.780,0.310,68
+0.5,loso,0.763,0.213,37
+0.5,resubstitution,0.890,0.365,68

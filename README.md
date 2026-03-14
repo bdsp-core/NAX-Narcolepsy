@@ -12,6 +12,7 @@ NAX-Narcolepsy/
 ├── discriminative-modeling/       # Note-level classification
 │   ├── narcolepsy_model.py        # Feature extraction & prediction pipeline
 │   ├── model_comp.py              # Model training & evaluation framework
+│   ├── retrain_all.py             # Retrain all cross-sectional models
 │   ├── discriminative-model.ipynb # Usage instructions and example workflow
 │   ├── config.yaml                # Feature definitions and model paths
 │   ├── env.toml                   # Environment configuration
@@ -29,12 +30,20 @@ NAX-Narcolepsy/
 │   │   └── METHODS.md             # Detailed methodology
 │   └── pooled-logistic-regression/  # Alternative PLR approach (archived)
 │
-├── paper_figures/                 # Notebooks & scripts to reproduce paper figures
-│   ├── confusion_matrices.ipynb   # Confusion matrix plots
+├── paper_figures/                 # Scripts to reproduce all manuscript figures
+│   ├── pub_style.py               # Shared publication style (colors, fonts, sizes)
+│   ├── consort_diagrams.py        # CONSORT flow diagrams
 │   ├── roc_prc.ipynb              # ROC and precision-recall curves
-│   ├── swimmer_plot.ipynb         # Swimmer plot of patient timelines
-│   └── feature_heatmap.py         # Feature evolution heatmaps (cases vs controls)
+│   ├── confusion_matrices.ipynb   # Confusion matrix plots
+│   ├── feature_heatmap.py         # Feature evolution heatmaps (cases vs controls)
+│   ├── swimmer_plot.py            # Swimmer plot of patient timelines
+│   └── site_trajectories.py       # Site-stratified trajectory sensitivity analysis
 │
+├── manuscript/                    # Manuscript verification
+│   └── verify_manuscript_numbers.py
+│
+├── build_manuscript_figures.sh    # Regenerate all figures end-to-end
+├── REPRODUCIBILITY.md             # Full reproducibility guide
 ├── timeline-viewer/               # Annotation tool (git submodule)
 │
 └── LICENSE
@@ -46,10 +55,10 @@ Classifies whether a clinical note belongs to a patient with narcolepsy. Uses ke
 
 ### Models
 
-Three pre-trained Random Forest classifiers:
-- `nt1_vs_not` -- NT1 vs. non-narcolepsy
-- `nt2_vs_not` -- NT2/IH vs. non-narcolepsy
-- `nt12_vs_not` -- Any narcolepsy (NT1 + NT2/IH) vs. non-narcolepsy
+Three classification tasks, each trained with four classifiers (LR, RF, GBT, XGB) via LOSO cross-validation:
+- `nt1_vs_others` -- NT1 vs. non-narcolepsy (best: RandomForest, AUROC=0.997)
+- `nt2ih_vs_others` -- NT2/IH vs. non-narcolepsy (best: XGBoost, AUROC=0.988)
+- `any_narcolepsy_vs_others` -- Any narcolepsy (NT1 + NT2/IH + Unclear) vs. non-narcolepsy (best: GradientBoosting, AUROC=0.990)
 
 ### Features
 
@@ -78,8 +87,8 @@ Computes a longitudinal risk score from clinical notes written **before** a narc
 
 ### Data
 
-- **Source**: BDSP (5 academic medical centers: BCH, BIDMC, Emory, MGB, Stanford)
-- **Cohort**: 181 any-narcolepsy training cases (68 NT1), 9,860 controls
+- **Source**: BDSP (5 academic medical centers: BCH, BIDMC, Emory, MGH, Stanford)
+- **Cohort**: 191 any-narcolepsy training cases (72 NT1, 119 NT2/IH), 8,480 controls (BIDMC and MGH general population)
 - **Features**: Same 924 NLP features as the discriminative models, extracted per visit
 
 ### Method
@@ -87,31 +96,31 @@ Computes a longitudinal risk score from clinical notes written **before** a narc
 - SGD logistic regression with L1 penalty and balanced minibatches
 - Chi-squared feature prefiltering (top 100 features)
 - Training window: [-2.5yr, -0.5yr] before diagnosis (0.5yr horizon exclusion prevents learning from diagnostic-workup visits)
+- Testing/scoring window: [-5yr, 0yr] before diagnosis
 - Alpha (regularization) selected via modal cross-validation across folds
-- Validation: stratified 5-fold CV (primary), leave-one-site-out CV (secondary)
+- Validation: stratified 5-fold CV (primary), leave-one-site-out CV (secondary, BIDMC and MGH only)
 
 ### Results
 
 | Outcome | 5-fold CV AUC | LOSO AUC | Training Cases |
 |---------|---------------|----------|----------------|
-| Any Narcolepsy (NT1 + NT2/IH) | 0.846 | 0.772 | 181 |
-| NT1 Only | 0.839 | 0.730 | 68 |
+| Any Narcolepsy (NT1 + NT2/IH) | 0.842 | 0.822 | 191 |
+| NT1 Only | 0.780 | 0.763 | 72 |
+| NT2/IH Only | 0.818 | 0.726 | 119 |
 
 ### Running
 
 ```bash
 cd predictive-modeling/risk_score_v2
-python risk_score_v2.py both
+python risk_score_v2.py all
 ```
 
-This trains both outcome models (any_narcolepsy, NT1), runs all cross-validation, trains the final model, and generates all figures and tables:
+This trains all three outcome models (any_narcolepsy, NT1, NT2/IH), runs all cross-validation, trains the final models, and generates all figures and tables:
 
-- `v2_performance_combined.png` -- CV / LOSO / resubstitution AUC and AUPRC
-- `v2_distributions_combined.png` -- Risk score distributions for cases vs. controls
-- `v2_features_combined.png` -- Top predictive features by coefficient magnitude
-- `v2_trajectories_combined.png` -- Risk score trajectories aligned to diagnosis (mean + 95% CI, 5-year window)
-- `v2_nnt_analysis.png` -- Number Needed to Test analysis (assumed prevalence 0.08%)
+- `v2_summary_*.csv` -- CV / LOSO / resubstitution AUC and AUPRC per outcome
 - `v2_loso_by_site.csv` -- LOSO performance broken down by site
+- `v2_results_*.pickle` -- Full results including model artifacts and trajectory data
+- Manuscript figures saved to output directory
 
 ### Dependencies
 
@@ -119,9 +128,20 @@ numpy, pandas, scikit-learn, matplotlib, seaborn, scipy, pyarrow
 
 ## Paper Figures
 
-Jupyter notebooks and scripts in `paper_figures/` reproduce the main figures from the manuscript. Each notebook loads data from `../data` (relative to the notebook) and requires the discriminative-modeling data files (features, notes, models).
+Scripts and notebooks in `paper_figures/` reproduce all manuscript figures. A shared publication style (`pub_style.py`) ensures consistent formatting across all figures (colorblind-safe palette, JAMA Neurology specs).
 
-`feature_heatmap.py` generates feature evolution heatmaps showing how selected predictive model features (non-zero L1 coefficients) evolve over time leading up to diagnosis in cases vs. matched controls. Run with `python feature_heatmap.py` to generate both outcome heatmaps, or pass `any_narcolepsy` or `nt1` for a single outcome.
+Run all figures at once:
+```bash
+bash build_manuscript_figures.sh
+```
+
+Or generate individual figures:
+- `python consort_diagrams.py` -- CONSORT flow diagrams (eFigures 1-2)
+- `roc_prc.ipynb` -- ROC and precision-recall curves (Figure 1; eFigures 3-5)
+- `confusion_matrices.ipynb` -- Confusion matrices (eFigures 6-8)
+- `python feature_heatmap.py` -- Feature evolution heatmaps (eFigures 12-14)
+- `python swimmer_plot.py` -- Swimmer plot of patient timelines (eFigure 15)
+- `python site_trajectories.py` -- Site-stratified trajectory sensitivity analysis (eFigure 16)
 
 ## Annotation Tool
 

@@ -14,9 +14,12 @@ Usage:
     python consort_diagrams.py
 """
 
-import os
+import os, sys
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pub_style import savefig as pub_savefig
 
 
 def draw_text(ax, x, y, title, body, fontsize=8.5, title_size=None,
@@ -74,7 +77,8 @@ def draw_side_text(ax, x_main, y_from, x_side, y_side, text,
 # Shared starting point
 # =============================================================================
 SHARED_START_TITLE = 'EHR Data from 5 BDSP Sites'
-SHARED_START_BODY = 'BCH, BIDMC, Emory, MGB, Stanford\n10,403 patients  |  543 narcolepsy cases (266 NT1, 277 NT2/IH)'
+SHARED_START_BODY_CROSS = 'BCH, BIDMC, Emory, MGH, Stanford\n10,403 patients  |  543 narcolepsy cases (266 NT1, 277 NT2/IH)'
+SHARED_START_BODY_LONG = 'BCH, BIDMC, Emory, MGH, Stanford\n10,401 patients  |  543 narcolepsy cases (266 NT1, 277 NT2/IH)\n9,858 general-population controls (BIDMC + MGH only)'
 
 # Updated annotation counts (v2 data)
 # NT1: 838 notes (312 patients), NT2/IH: 550 (326 patients)
@@ -96,7 +100,7 @@ def make_cross_sectional_consort():
 
     # --- Row 1: Shared EHR Data Source ---
     y1 = 0.93
-    draw_text(ax, cx, y1, SHARED_START_TITLE, SHARED_START_BODY)
+    draw_text(ax, cx, y1, SHARED_START_TITLE, SHARED_START_BODY_CROSS)
 
     # --- Row 2: Stratified Sampling ---
     y2 = 0.82
@@ -187,10 +191,9 @@ def make_cross_sectional_consort():
 
     fig.tight_layout()
     os.makedirs('../manuscript/figures', exist_ok=True)
-    fig.savefig('../manuscript/figures/efigure1_consort_cross_sectional.png',
-                dpi=300, bbox_inches='tight', facecolor='white')
+    pub_savefig(fig, '../manuscript/figures/efigure1_consort_cross_sectional.png')
     plt.close(fig)
-    print('Saved: manuscript/figures/efigure1_consort_cross_sectional.png')
+    print('Saved: efigure1_consort_cross_sectional.png')
 
 
 # =============================================================================
@@ -207,23 +210,24 @@ def make_longitudinal_consort():
 
     # --- Row 1: Shared EHR Data Source ---
     y1 = 0.93
-    draw_text(ax, cx, y1, SHARED_START_TITLE, SHARED_START_BODY)
+    draw_text(ax, cx, y1, SHARED_START_TITLE, SHARED_START_BODY_LONG)
 
     # --- Row 2: Full longitudinal cohort ---
     y2 = 0.82
     draw_arrow(ax, cx, y1 - 0.04, cx, y2 + 0.025)
     draw_text(ax, cx, y2,
               'Longitudinal Visit Extraction',
-              '10,403 patients  |  1,308,867 visits\n'
-              '543 cases (266 NT1, 277 NT2/IH)  |  9,860 controls')
+              '10,401 patients  |  1,308,247 visits\n'
+              '543 cases (266 NT1, 277 NT2/IH)  |  9,858 controls\n'
+              'Controls: general hospital population (BIDMC + MGH)')
 
     # --- Row 3: Gap Exclusion ---
     y3 = 0.70
     draw_arrow(ax, cx, y2 - 0.045, cx, y3 + 0.025)
     draw_text(ax, cx, y3,
               'After Gap Exclusion (>5 yr, cases only)',
-              '10,348 patients  |  1,300,421 visits\n'
-              '488 cases (241 NT1, 247 NT2/IH)  |  9,860 controls')
+              '10,346 patients  |  1,299,801 visits\n'
+              '488 cases (241 NT1, 247 NT2/IH)  |  9,858 controls')
 
     draw_side_text(ax, cx + 0.22, y3 - 0.005, excl_x, y3 - 0.04,
                    'Excluded: 55 cases\n'
@@ -235,10 +239,10 @@ def make_longitudinal_consort():
     draw_arrow(ax, cx, y3 - 0.045, cx, y4 + 0.025)
     draw_text(ax, cx, y4,
               'After Visit Subsampling (max 20/patient)',
-              '10,348 patients  |  160,192 visits')
+              '10,346 patients  |  160,152 visits')
 
     draw_side_text(ax, cx + 0.22, y4 - 0.005, excl_x, y4 - 0.035,
-                   'Visits reduced: 1,300,421 → 160,192\n'
+                   'Visits reduced: 1,299,801 → 160,152\n'
                    'First and last visits preserved',
                    fontsize=7.5, color='#7B68AE')
 
@@ -273,20 +277,20 @@ def make_longitudinal_consort():
     draw_text(ax, left_x, y7,
               'Any Narcolepsy Model',
               '181 cases (NT1 + NT2/IH)\n'
-              '9,860 controls',
+              '9,858 controls',
               fontsize=8)
 
     draw_text(ax, mid_x, y7,
               'NT1-Only Model',
               '68 NT1 cases\n'
-              '9,860 controls\n'
+              '9,858 controls\n'
               'NT2/IH excluded',
               fontsize=8)
 
     draw_text(ax, right_x, y7,
               'NT2/IH-Only Model',
               '113 NT2/IH cases\n'
-              '9,860 controls\n'
+              '9,858 controls\n'
               'NT1 excluded',
               fontsize=8)
 
@@ -298,28 +302,30 @@ def make_longitudinal_consort():
 
     draw_text(ax, left_x, y8,
               'Evaluation',
-              '5-fold CV: AUC 0.846\n'
-              'LOSO: AUC 0.772',
+              '5-fold CV: AUC 0.842\n'
+              'LOSO: AUC 0.822\n'
+              '(BIDMC + MGH only)',
               fontsize=8)
 
     draw_text(ax, mid_x, y8,
               'Evaluation',
-              '5-fold CV: AUC 0.839\n'
-              'LOSO: AUC 0.730',
+              '5-fold CV: AUC 0.780\n'
+              'LOSO: AUC 0.763\n'
+              '(BIDMC + MGH only)',
               fontsize=8)
 
     draw_text(ax, right_x, y8,
               'Evaluation',
-              '5-fold CV: AUC 0.820\n'
-              'LOSO: AUC 0.722',
+              '5-fold CV: AUC 0.818\n'
+              'LOSO: AUC 0.726\n'
+              '(BIDMC + MGH only)',
               fontsize=8)
 
     fig.tight_layout()
     os.makedirs('../manuscript/figures', exist_ok=True)
-    fig.savefig('../manuscript/figures/efigure2_consort_longitudinal.png',
-                dpi=300, bbox_inches='tight', facecolor='white')
+    pub_savefig(fig, '../manuscript/figures/efigure2_consort_longitudinal.png')
     plt.close(fig)
-    print('Saved: manuscript/figures/efigure2_consort_longitudinal.png')
+    print('Saved: efigure2_consort_longitudinal.png')
 
 
 if __name__ == '__main__':

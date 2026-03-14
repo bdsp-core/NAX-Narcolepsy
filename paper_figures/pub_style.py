@@ -51,7 +51,7 @@ SITE_COLORS = {
     'BCH':      OKABE_ITO['blue'],       # #0072B2
     'BIDMC':    OKABE_ITO['vermilion'],   # #D55E00
     'Emory':    OKABE_ITO['sky_blue'],    # #56B4E9
-    'MGB':      OKABE_ITO['green'],       # #009E73
+    'MGH':      OKABE_ITO['green'],       # #009E73
     'Stanford': OKABE_ITO['purple'],      # #CC79A7
 }
 
