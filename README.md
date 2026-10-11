@@ -150,6 +150,14 @@ Or generate individual figures:
 
 The `timeline-viewer/` directory is a git submodule pointing to [bdsp-core/timeline-viewer](https://github.com/bdsp-core/timeline-viewer), a web application for reviewing and annotating patient clinical timelines. See its own README for setup instructions.
 
+## Data locations
+
+- The published dataset lives at `s3://bdsp-opendata-credentialed/nax-narcolepsy/` (project page:
+  https://bdsp.io/content/qsyoj1ut1t90zzl9ajpr/1.0/; a signed DUA is required).
+- A local build of `data/` and `predictive-modeling/` outputs, which differs byte-for-byte from the published
+  files, was archived to the BDSP internal staging bucket (`s3://bdsp-staging/local-backups/2026-10-11/NAX-Narcolepsy/`) on 2026-10-11.
+  Treat the published files as canonical.
+
 ## License
 
 CC BY-NC 4.0 (Attribution-NonCommercial 4.0 International). Commercial use is prohibited. See [LICENSE](LICENSE) for details.
